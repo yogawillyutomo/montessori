@@ -49,9 +49,9 @@ class Observation extends Model
     public function getStatusLabelAttribute(): string
     {
         return [
-            'achieved' => 'Tercapai',
-            'emerging' => 'Berkembang',
-            'needs_support' => 'Perlu stimulasi',
+            'achieved' => 'SM - Sudah maksimal',
+            'emerging' => 'SB - Sudah berkembang',
+            'needs_support' => 'SD - Sedang berkembang',
             'not_observed' => 'Belum diamati',
         ][$this->status] ?? $this->status;
     }

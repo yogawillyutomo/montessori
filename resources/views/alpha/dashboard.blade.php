@@ -1,13 +1,13 @@
 @extends('alpha.layout')
 
-@section('title', 'Dashboard - Montessori Alpha')
+@section('title', 'Dashboard - Montessori Bloom')
 @section('page_title', 'Dashboard Monitoring')
 @section('page_subtitle', 'Ringkasan dari master data, proses harian, dan draft laporan.')
 
 @section('content')
     <div class="section-head">
         <div>
-            <h2>Ringkasan Alpha</h2>
+            <h2>Ringkasan Operasional</h2>
             <div class="meta">Data dibuat dari migration dan seeder Laravel. Rapor masih draft otomatis, bukan final.</div>
         </div>
         <div class="toolbar">
@@ -36,7 +36,7 @@
                 @foreach ($areaScores as $area)
                     <div class="progress-row">
                         <div class="progress-meta">
-                            <span>{{ $area['name'] }} · {{ $area['observed'] }} observasi</span>
+                            <span>{{ $area['name'] }} | {{ $area['observed'] }} observasi</span>
                             <strong>{{ $area['score'] }}%</strong>
                         </div>
                         <div class="bar {{ strtolower(str_replace(' ', '-', $area['name'])) }}"><span style="width: {{ $area['score'] }}%"></span></div>
@@ -54,7 +54,7 @@
                 </div>
                 <div class="line-card">
                     <strong>2. Proses Harian</strong>
-                    <div class="meta">Jadwal mingguan, sesi, absensi, observasi, dan ILP.</div>
+                    <div class="meta">Jadwal mingguan, presensi, observasi, dan ILP.</div>
                 </div>
                 <div class="line-card">
                     <strong>3. Laporan</strong>
@@ -82,7 +82,7 @@
                     @foreach ($classes as $class)
                         <tr>
                             <td><strong>{{ $class->name }}</strong></td>
-                            <td>{{ $class->level }}</td>
+                            <td>{{ $class->classLevel?->name ?? $class->level }}</td>
                             <td>{{ $class->students_count }}</td>
                             <td>{{ $class->weekly_schedules_count }}</td>
                             <td>{{ $class->capacity }}</td>
@@ -94,7 +94,7 @@
         </section>
 
         <section class="panel">
-            <h3>Sesi Terakhir</h3>
+            <h3>Presensi Terakhir</h3>
             <div class="card-list" style="margin-top: 14px">
                 @forelse ($sessions as $session)
                     @php
@@ -104,8 +104,8 @@
                     <div class="line-card">
                         <div class="line-head">
                             <div>
-                                <strong>{{ $session->schoolClass->name }} · {{ $session->topic }}</strong>
-                                <div class="meta">{{ $session->session_date->format('d M Y') }} · {{ $start }}-{{ $end }} · {{ $session->teacher->name }}</div>
+                                <strong>{{ $session->schoolClass->name }} | {{ $session->topic }}</strong>
+                                <div class="meta">{{ $session->session_date->format('d M Y') }} | {{ $start }}-{{ $end }} | {{ $session->teacher->name }}</div>
                             </div>
                             <span class="status status-{{ str_replace('_', '-', $session->status) }}">{{ $statusLabels[$session->status] ?? $session->status }}</span>
                         </div>
@@ -116,7 +116,7 @@
                         </div>
                     </div>
                 @empty
-                    <div class="line-card">Belum ada sesi.</div>
+                    <div class="line-card">Belum ada presensi.</div>
                 @endforelse
             </div>
         </section>

@@ -169,6 +169,8 @@ return new class extends Migration
             $table->unsignedTinyInteger('score')->default(0);
             $table->text('note')->nullable();
             $table->timestamps();
+
+            $table->unique(['class_session_id', 'student_id', 'indicator_id', 'observed_on'], 'observations_daily_indicator_unique');
         });
 
         Schema::create('ilp_plans', function (Blueprint $table) {

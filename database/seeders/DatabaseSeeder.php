@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\AcademicYear;
 use App\Models\Attendance;
 use App\Models\ClassSession;
+use App\Models\ClassLevel;
 use App\Models\DevelopmentArea;
 use App\Models\Guardian;
 use App\Models\IlpPlan;
@@ -27,180 +28,199 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $users = [
-            'super_admin' => User::create([
+            'super_admin' => User::query()->updateOrCreate(['email' => 'super@montessori.test'], [
                 'name' => 'Direktur Sekolah',
-                'email' => 'super@montessori.test',
                 'password' => 'password',
                 'role' => 'super_admin',
+                'is_active' => true,
             ]),
-            'admin' => User::create([
+            'admin' => User::query()->updateOrCreate(['email' => 'admin@montessori.test'], [
                 'name' => 'Admin Operasional',
-                'email' => 'admin@montessori.test',
                 'password' => 'password',
                 'role' => 'admin',
+                'is_active' => true,
             ]),
-            'teacher_raras' => User::create([
+            'teacher_raras' => User::query()->updateOrCreate(['email' => 'raras@montessori.test'], [
                 'name' => 'Bu Raras',
-                'email' => 'raras@montessori.test',
                 'password' => 'password',
                 'role' => 'teacher',
+                'is_active' => true,
             ]),
-            'teacher_mira' => User::create([
+            'teacher_mira' => User::query()->updateOrCreate(['email' => 'mira@montessori.test'], [
                 'name' => 'Bu Mira',
-                'email' => 'mira@montessori.test',
                 'password' => 'password',
                 'role' => 'teacher',
+                'is_active' => true,
             ]),
-            'parent_alya' => User::create([
+            'parent_alya' => User::query()->updateOrCreate(['email' => 'parent@montessori.test'], [
                 'name' => 'Orangtua Alya',
-                'email' => 'parent@montessori.test',
                 'password' => 'password',
                 'role' => 'parent',
+                'is_active' => true,
+            ]),
+        ];
+
+        $classLevels = [
+            'infant' => ClassLevel::query()->updateOrCreate(['slug' => 'infant'], [
+                'name' => 'Infant',
+                'sequence' => 0,
+                'min_age_months' => 6,
+                'max_age_months' => 24,
+                'color' => 'blue',
+            ]),
+            'sunny' => ClassLevel::query()->updateOrCreate(['slug' => 'sunny'], [
+                'name' => 'Sunny',
+                'sequence' => 1,
+                'min_age_months' => 24,
+                'max_age_months' => 48,
+                'color' => 'sage',
+            ]),
+            'glow' => ClassLevel::query()->updateOrCreate(['slug' => 'glow'], [
+                'name' => 'Glow',
+                'sequence' => 2,
+                'min_age_months' => 48,
+                'max_age_months' => 72,
+                'color' => 'coral',
             ]),
         ];
 
         $classes = [
-            'sunny' => SchoolClass::create([
-                'name' => 'Sunny',
-                'slug' => 'sunny',
-                'level' => 'Toddler',
-                'age_range' => '2-4 tahun',
+            'sunny' => SchoolClass::query()->updateOrCreate(['slug' => 'sunny-1'], [
+                'class_level_id' => $classLevels['sunny']->id,
+                'name' => 'Sunny 1',
+                'level' => 'Sunny',
+                'age_range' => $classLevels['sunny']->age_range_label,
                 'capacity' => 18,
-                'color' => 'sage',
+                'color' => $classLevels['sunny']->color,
             ]),
-            'glow' => SchoolClass::create([
-                'name' => 'Glow',
-                'slug' => 'glow',
-                'level' => 'Preschool',
-                'age_range' => '4-6 tahun',
+            'sunny2' => SchoolClass::query()->updateOrCreate(['slug' => 'sunny-2'], [
+                'class_level_id' => $classLevels['sunny']->id,
+                'name' => 'Sunny 2',
+                'level' => 'Sunny',
+                'age_range' => $classLevels['sunny']->age_range_label,
+                'capacity' => 18,
+                'color' => $classLevels['sunny']->color,
+            ]),
+            'glow' => SchoolClass::query()->updateOrCreate(['slug' => 'glow-1'], [
+                'class_level_id' => $classLevels['glow']->id,
+                'name' => 'Glow 1',
+                'level' => 'Glow',
+                'age_range' => $classLevels['glow']->age_range_label,
                 'capacity' => 16,
-                'color' => 'coral',
+                'color' => $classLevels['glow']->color,
             ]),
-            'infant' => SchoolClass::create([
-                'name' => 'Infant',
-                'slug' => 'infant',
+            'infant' => SchoolClass::query()->updateOrCreate(['slug' => 'infant-1'], [
+                'class_level_id' => $classLevels['infant']->id,
+                'name' => 'Infant 1',
                 'level' => 'Infant',
-                'age_range' => '6-24 bulan',
+                'age_range' => $classLevels['infant']->age_range_label,
                 'capacity' => 10,
-                'color' => 'blue',
+                'color' => $classLevels['infant']->color,
             ]),
         ];
 
         $teachers = [
-            'raras' => Teacher::create([
+            'raras' => Teacher::query()->updateOrCreate(['code' => 'TCH01'], [
                 'user_id' => $users['teacher_raras']->id,
                 'name' => 'Bu Raras',
-                'code' => 'TCH01',
                 'focus_area' => 'Practical Life dan Bahasa',
                 'phone' => '0812-0000-0001',
             ]),
-            'mira' => Teacher::create([
+            'mira' => Teacher::query()->updateOrCreate(['code' => 'TCH02'], [
                 'user_id' => $users['teacher_mira']->id,
                 'name' => 'Bu Mira',
-                'code' => 'TCH02',
                 'focus_area' => 'Sensorial dan Kognitif',
                 'phone' => '0812-0000-0002',
             ]),
-            'dimas' => Teacher::create([
+            'dimas' => Teacher::query()->updateOrCreate(['code' => 'TCH03'], [
                 'name' => 'Pak Dimas',
-                'code' => 'TCH03',
                 'focus_area' => 'Motorik Kasar',
                 'phone' => '0812-0000-0003',
             ]),
-            'hana' => Teacher::create([
+            'hana' => Teacher::query()->updateOrCreate(['code' => 'TCH04'], [
                 'name' => 'Bu Hana',
-                'code' => 'TCH04',
                 'focus_area' => 'Infant Care',
                 'phone' => '0812-0000-0004',
             ]),
         ];
 
         $guardians = [
-            'alya' => Guardian::create([
+            'alya' => Guardian::query()->updateOrCreate(['phone' => '0812-1111-0001'], [
                 'user_id' => $users['parent_alya']->id,
                 'name' => 'Orangtua Alya',
                 'relationship' => 'Ibu',
-                'phone' => '0812-1111-0001',
                 'email' => 'parent@montessori.test',
                 'address' => 'Purwokerto',
             ]),
-            'raka' => Guardian::create(['name' => 'Orangtua Raka', 'relationship' => 'Ayah', 'phone' => '0812-1111-0002', 'address' => 'Banyumas']),
-            'nala' => Guardian::create(['name' => 'Orangtua Nala', 'relationship' => 'Ibu', 'phone' => '0812-1111-0003', 'address' => 'Kembaran']),
-            'kirana' => Guardian::create(['name' => 'Orangtua Kirana', 'relationship' => 'Ibu', 'phone' => '0812-1111-0004', 'address' => 'Purwokerto Utara']),
-            'arka' => Guardian::create(['name' => 'Orangtua Arka', 'relationship' => 'Ayah', 'phone' => '0812-1111-0005', 'address' => 'Sokaraja']),
-            'maya' => Guardian::create(['name' => 'Orangtua Maya', 'relationship' => 'Ibu', 'phone' => '0812-1111-0006', 'address' => 'Purbalingga']),
-            'rumi' => Guardian::create(['name' => 'Orangtua Rumi', 'relationship' => 'Ibu', 'phone' => '0812-1111-0007', 'address' => 'Kroya']),
-            'shaka' => Guardian::create(['name' => 'Orangtua Shaka', 'relationship' => 'Ayah', 'phone' => '0812-1111-0008', 'address' => 'Purwokerto']),
+            'raka' => Guardian::query()->updateOrCreate(['phone' => '0812-1111-0002'], ['name' => 'Orangtua Raka', 'relationship' => 'Ayah', 'address' => 'Banyumas']),
+            'nala' => Guardian::query()->updateOrCreate(['phone' => '0812-1111-0003'], ['name' => 'Orangtua Nala', 'relationship' => 'Ibu', 'address' => 'Kembaran']),
+            'kirana' => Guardian::query()->updateOrCreate(['phone' => '0812-1111-0004'], ['name' => 'Orangtua Kirana', 'relationship' => 'Ibu', 'address' => 'Purwokerto Utara']),
+            'arka' => Guardian::query()->updateOrCreate(['phone' => '0812-1111-0005'], ['name' => 'Orangtua Arka', 'relationship' => 'Ayah', 'address' => 'Sokaraja']),
+            'maya' => Guardian::query()->updateOrCreate(['phone' => '0812-1111-0006'], ['name' => 'Orangtua Maya', 'relationship' => 'Ibu', 'address' => 'Purbalingga']),
+            'rumi' => Guardian::query()->updateOrCreate(['phone' => '0812-1111-0007'], ['name' => 'Orangtua Rumi', 'relationship' => 'Ibu', 'address' => 'Kroya']),
+            'shaka' => Guardian::query()->updateOrCreate(['phone' => '0812-1111-0008'], ['name' => 'Orangtua Shaka', 'relationship' => 'Ayah', 'address' => 'Purwokerto']),
         ];
 
         $students = [
-            'alya' => Student::create([
+            'alya' => Student::query()->updateOrCreate(['code' => 'SUN01'], [
                 'school_class_id' => $classes['sunny']->id,
                 'guardian_id' => $guardians['alya']->id,
-                'code' => 'SUN01',
                 'name' => 'Alya Pramesti',
                 'gender' => 'Perempuan',
                 'birth_place' => 'Banyumas',
                 'birth_date' => '2022-09-22',
             ]),
-            'raka' => Student::create([
+            'raka' => Student::query()->updateOrCreate(['code' => 'SUN02'], [
                 'school_class_id' => $classes['sunny']->id,
                 'guardian_id' => $guardians['raka']->id,
-                'code' => 'SUN02',
                 'name' => 'Raka Mahendra',
                 'gender' => 'Laki-laki',
                 'birth_place' => 'Purwokerto',
                 'birth_date' => '2023-07-16',
             ]),
-            'nala' => Student::create([
+            'nala' => Student::query()->updateOrCreate(['code' => 'SUN03'], [
                 'school_class_id' => $classes['sunny']->id,
                 'guardian_id' => $guardians['nala']->id,
-                'code' => 'SUN03',
                 'name' => 'Nala Putri',
                 'gender' => 'Perempuan',
                 'birth_place' => 'Banyumas',
                 'birth_date' => '2024-01-15',
             ]),
-            'kirana' => Student::create([
+            'kirana' => Student::query()->updateOrCreate(['code' => 'GLO01'], [
                 'school_class_id' => $classes['glow']->id,
                 'guardian_id' => $guardians['kirana']->id,
-                'code' => 'GLO01',
                 'name' => 'Kirana Satya',
                 'gender' => 'Perempuan',
                 'birth_place' => 'Purwokerto',
                 'birth_date' => '2020-11-05',
             ]),
-            'arka' => Student::create([
+            'arka' => Student::query()->updateOrCreate(['code' => 'GLO02'], [
                 'school_class_id' => $classes['glow']->id,
                 'guardian_id' => $guardians['arka']->id,
-                'code' => 'GLO02',
                 'name' => 'Arka Wijaya',
                 'gender' => 'Laki-laki',
                 'birth_place' => 'Banyumas',
                 'birth_date' => '2021-02-18',
             ]),
-            'maya' => Student::create([
+            'maya' => Student::query()->updateOrCreate(['code' => 'GLO03'], [
                 'school_class_id' => $classes['glow']->id,
                 'guardian_id' => $guardians['maya']->id,
-                'code' => 'GLO03',
                 'name' => 'Maya Salsabila',
                 'gender' => 'Perempuan',
                 'birth_place' => 'Purbalingga',
                 'birth_date' => '2021-08-12',
             ]),
-            'rumi' => Student::create([
+            'rumi' => Student::query()->updateOrCreate(['code' => 'INF01'], [
                 'school_class_id' => $classes['infant']->id,
                 'guardian_id' => $guardians['rumi']->id,
-                'code' => 'INF01',
                 'name' => 'Rumi Adikara',
                 'gender' => 'Laki-laki',
                 'birth_place' => 'Kroya',
                 'birth_date' => '2024-04-29',
             ]),
-            'shaka' => Student::create([
+            'shaka' => Student::query()->updateOrCreate(['code' => 'INF02'], [
                 'school_class_id' => $classes['infant']->id,
                 'guardian_id' => $guardians['shaka']->id,
-                'code' => 'INF02',
                 'name' => 'Shaka Nawasena',
                 'gender' => 'Laki-laki',
                 'birth_place' => 'Purwokerto',
@@ -208,14 +228,16 @@ class DatabaseSeeder extends Seeder
             ]),
         ];
 
-        $academicYear = AcademicYear::create([
-            'name' => '2025/2026',
+        $academicYear = AcademicYear::query()->updateOrCreate(['name' => '2025/2026'], [
             'starts_on' => '2025-07-01',
             'ends_on' => '2026-06-30',
             'is_active' => true,
         ]);
 
-        $term = Term::create([
+        $term = Term::query()->updateOrCreate([
+            'academic_year_id' => $academicYear->id,
+            'name' => 'Semester 2',
+        ], [
             'academic_year_id' => $academicYear->id,
             'name' => 'Semester 2',
             'starts_on' => '2026-01-01',
@@ -235,9 +257,8 @@ class DatabaseSeeder extends Seeder
         $areas = [];
         $sort = 1;
         foreach ($areaSeeds as $slug => [$name, $color]) {
-            $areas[$slug] = DevelopmentArea::create([
+            $areas[$slug] = DevelopmentArea::query()->updateOrCreate(['slug' => $slug], [
                 'name' => $name,
-                'slug' => $slug,
                 'color' => $color,
                 'sort_order' => $sort++,
             ]);
@@ -261,12 +282,12 @@ class DatabaseSeeder extends Seeder
 
         $indicators = [];
         foreach ($indicatorRows as [$code, $areaSlug, $subArea, $description, $level]) {
-            $indicators[$code] = Indicator::create([
+            $indicators[$code] = Indicator::query()->updateOrCreate(['code' => $code], [
                 'development_area_id' => $areas[$areaSlug]->id,
-                'code' => $code,
                 'sub_area' => $subArea,
                 'description' => $description,
                 'level' => $level,
+                'is_active' => true,
             ]);
         }
 
@@ -277,6 +298,8 @@ class DatabaseSeeder extends Seeder
                 'day' => 1,
                 'start' => '08:00',
                 'end' => '09:30',
+                'room' => 'Ruang Sunny',
+                'capacity' => 7,
                 'topic' => 'Practical Life dan Bahasa',
                 'students' => ['alya', 'raka'],
             ],
@@ -286,6 +309,8 @@ class DatabaseSeeder extends Seeder
                 'day' => 1,
                 'start' => '10:00',
                 'end' => '11:00',
+                'room' => 'Ruang Infant',
+                'capacity' => 6,
                 'topic' => 'Sensorial Play',
                 'students' => ['rumi', 'shaka'],
             ],
@@ -295,6 +320,8 @@ class DatabaseSeeder extends Seeder
                 'day' => 2,
                 'start' => '08:00',
                 'end' => '09:30',
+                'room' => 'Ruang Sensorial',
+                'capacity' => 8,
                 'topic' => 'Sensorial dan Klasifikasi',
                 'students' => ['kirana', 'arka', 'maya'],
             ],
@@ -304,6 +331,8 @@ class DatabaseSeeder extends Seeder
                 'day' => 3,
                 'start' => '09:00',
                 'end' => '10:30',
+                'room' => 'Ruang Motorik',
+                'capacity' => 7,
                 'topic' => 'Motorik Kasar',
                 'students' => ['alya', 'nala'],
             ],
@@ -313,6 +342,8 @@ class DatabaseSeeder extends Seeder
                 'day' => 4,
                 'start' => '08:30',
                 'end' => '10:00',
+                'room' => 'Ruang Bahasa',
+                'capacity' => 8,
                 'topic' => 'Bahasa dan Kelompok Kecil',
                 'students' => ['kirana', 'maya'],
             ],
@@ -322,22 +353,33 @@ class DatabaseSeeder extends Seeder
                 'day' => 5,
                 'start' => '08:00',
                 'end' => '09:00',
+                'room' => 'Ruang Infant',
+                'capacity' => 6,
                 'topic' => 'Rutinitas dan Bonding',
                 'students' => ['rumi'],
             ],
         ];
 
         foreach ($schedules as $key => $row) {
-            $schedule = \App\Models\WeeklySchedule::create([
+            $schedule = \App\Models\WeeklySchedule::query()->updateOrCreate([
+                'school_class_id' => $classes[$row['class']]->id,
+                'day_of_week' => $row['day'],
+                'starts_at' => $row['start'],
+                'ends_at' => $row['end'],
+                'room' => $row['room'],
+            ], [
                 'school_class_id' => $classes[$row['class']]->id,
                 'teacher_id' => $teachers[$row['teacher']]->id,
+                'room' => $row['room'],
+                'capacity' => $row['capacity'],
                 'day_of_week' => $row['day'],
                 'starts_at' => $row['start'],
                 'ends_at' => $row['end'],
                 'topic' => $row['topic'],
+                'is_active' => true,
             ]);
 
-            $schedule->students()->attach(
+            $schedule->students()->sync(
                 collect($row['students'])->map(fn (string $key) => $students[$key]->id)->all()
             );
 
@@ -356,10 +398,18 @@ class DatabaseSeeder extends Seeder
         $sessions = [];
         foreach ($sessionDates as $key => $date) {
             $schedule = $schedules[$key]['model'];
-            $session = ClassSession::create([
+            $session = ClassSession::query()->updateOrCreate([
+                'school_class_id' => $schedule->school_class_id,
+                'session_date' => $date,
+                'starts_at' => $schedule->starts_at,
+                'ends_at' => $schedule->ends_at,
+                'room' => $schedule->room,
+            ], [
                 'weekly_schedule_id' => $schedule->id,
                 'school_class_id' => $schedule->school_class_id,
                 'teacher_id' => $schedule->teacher_id,
+                'room' => $schedule->room,
+                'capacity' => $schedule->capacity ?: $schedule->schoolClass->capacity,
                 'session_date' => $date,
                 'starts_at' => $schedule->starts_at,
                 'ends_at' => $schedule->ends_at,
@@ -367,12 +417,13 @@ class DatabaseSeeder extends Seeder
                 'status' => 'completed',
             ]);
             $studentIds = $schedule->students()->pluck('students.id')->all();
-            $session->students()->attach($studentIds);
+            $session->students()->sync($studentIds);
 
             foreach ($studentIds as $studentId) {
-                Attendance::create([
+                Attendance::query()->updateOrCreate([
                     'class_session_id' => $session->id,
                     'student_id' => $studentId,
+                ], [
                     'status' => 'present',
                 ]);
             }
@@ -393,12 +444,13 @@ class DatabaseSeeder extends Seeder
 
         $createdObservations = [];
         foreach ($observationRows as [$sessionKey, $studentKey, $indicatorCode, $teacherKey, $status, $note]) {
-            $observation = Observation::create([
+            $observation = Observation::query()->updateOrCreate([
                 'class_session_id' => $sessions[$sessionKey]->id,
                 'student_id' => $students[$studentKey]->id,
                 'indicator_id' => $indicators[$indicatorCode]->id,
-                'teacher_id' => $teachers[$teacherKey]->id,
                 'observed_on' => $sessions[$sessionKey]->session_date,
+            ], [
+                'teacher_id' => $teachers[$teacherKey]->id,
                 'status' => $status,
                 'score' => Observation::STATUS_SCORES[$status],
                 'note' => $note,
@@ -408,7 +460,11 @@ class DatabaseSeeder extends Seeder
         }
 
         foreach (collect($createdObservations)->where('status', 'needs_support') as $observation) {
-            IlpPlan::create([
+            IlpPlan::query()->updateOrCreate([
+                'student_id' => $observation->student_id,
+                'indicator_id' => $observation->indicator_id,
+                'term_id' => $term->id,
+            ], [
                 'student_id' => $observation->student_id,
                 'indicator_id' => $observation->indicator_id,
                 'term_id' => $term->id,
@@ -426,7 +482,10 @@ class DatabaseSeeder extends Seeder
             $summary = $this->buildReportSummary($student);
             $bestArea = collect($summary['areas'])->sortByDesc('score')->first();
 
-            Report::create([
+            Report::query()->updateOrCreate([
+                'student_id' => $student->id,
+                'term_id' => $term->id,
+            ], [
                 'student_id' => $student->id,
                 'term_id' => $term->id,
                 'homeroom_teacher_id' => $teachers['raras']->id,

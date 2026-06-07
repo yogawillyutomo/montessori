@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['weekly_schedule_id', 'school_class_id', 'teacher_id', 'session_date', 'starts_at', 'ends_at', 'topic', 'status'])]
+#[Fillable(['weekly_schedule_id', 'school_class_id', 'teacher_id', 'room', 'capacity', 'session_date', 'starts_at', 'ends_at', 'topic', 'status'])]
 class ClassSession extends Model
 {
     use HasFactory;

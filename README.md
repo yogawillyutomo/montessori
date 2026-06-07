@@ -1,17 +1,17 @@
-# Montessori Alpha
+# Montessori Bloom
 
-Aplikasi alpha untuk sistem monitoring kelas Montessori. Fokus versi ini adalah fondasi Laravel dengan migration, seed data, dan alur awal yang memisahkan **Master Data**, **Proses Harian**, dan **Laporan/Rapor**.
+Aplikasi operasional untuk monitoring kelas Montessori. Fokus saat ini adalah fondasi Laravel dengan migration, seed data, dan alur kerja yang memisahkan **Master Data**, **Proses Harian**, dan **Laporan/Rapor**.
 
-## Fitur Alpha
+## Fitur Operasional Awal
 
 - Dashboard monitoring operasional.
 - Master data kelas, siswa, orangtua, guru, area perkembangan, dan indikator.
 - Jadwal mingguan fleksibel.
-- Pembuatan sesi dari jadwal mingguan.
+- Pembuatan presensi dari jadwal mingguan.
 - Input observasi per siswa dan indikator.
 - Draft ILP otomatis saat observasi berstatus perlu stimulasi.
 - Draft rapor otomatis dari data observasi.
-- Simulasi role via dropdown: Super Admin, Admin, Guru, Orangtua.
+- Mode kerja role via dropdown sementara: Super Admin, Admin, Guru, Orangtua.
 
 ## Setup Lokal
 
@@ -45,7 +45,7 @@ password
 
 ## Catatan Data
 
-Workbook Excel asli tidak ikut disimpan di repository karena berisi data anak/orangtua. Struktur workbook dipakai sebagai acuan migration dan seeder alpha.
+Workbook Excel asli tidak ikut disimpan di repository karena berisi data anak/orangtua. Struktur workbook dipakai sebagai acuan migration dan seeder.
 
 ## Validasi
 
