@@ -327,22 +327,37 @@
                 <button class="icon-btn" type="button" aria-label="Opsi presensi"><i data-lucide="more-vertical" class="nav-icon"></i></button>
             </div>
 
-            <div class="attendance-date-card">
-                <a class="attendance-date-arrow" href="{{ route('alpha.process.attendance', ['date' => $prevDate]) }}" aria-label="Tanggal sebelumnya">
-                    <i data-lucide="chevron-left" class="nav-icon"></i>
-                </a>
-                <div>
-                    <span>{{ strtoupper($dayLabels[$selectedDate->dayOfWeekIso] ?? $selectedDate->format('l')) }}{{ strtoupper($todayText) }}</span>
-                    <strong>{{ $selectedDate->translatedFormat('d M Y') }}</strong>
-                    <form class="attendance-date-form" method="get" action="{{ route('alpha.process.attendance') }}">
-                        <label for="attendance-date-picker">Pilih tanggal</label>
-                        <input id="attendance-date-picker" type="date" name="date" value="{{ $selectedDate->toDateString() }}" data-attendance-date-picker>
-                        <button class="btn ghost" type="submit">Tampilkan</button>
-                    </form>
+            <div class="attendance-date-card" id="attendance-date-card">
+                {{-- Three.js particle canvas --}}
+                <canvas id="attendance-canvas"></canvas>
+
+                {{-- Navigation row: prev / date info / next --}}
+                <div class="attendance-date-nav">
+                    <a class="attendance-date-arrow" href="{{ route('alpha.process.attendance', ['date' => $prevDate]) }}" aria-label="Tanggal sebelumnya">
+                        <i data-lucide="chevron-left" class="nav-icon"></i>
+                    </a>
+
+                    <div class="attendance-date-info">
+                        <div class="date-day">
+                            {{ strtoupper($dayLabels[$selectedDate->dayOfWeekIso] ?? $selectedDate->format('l')) }}
+                            @if($selectedDate->isToday())
+                                <span class="date-today-badge">Hari ini</span>
+                            @endif
+                        </div>
+                        <div class="date-main">{{ $selectedDate->translatedFormat('d M Y') }}</div>
+                    </div>
+
+                    <a class="attendance-date-arrow" href="{{ route('alpha.process.attendance', ['date' => $nextDate]) }}" aria-label="Tanggal berikutnya">
+                        <i data-lucide="chevron-right" class="nav-icon"></i>
+                    </a>
                 </div>
-                <a class="attendance-date-arrow" href="{{ route('alpha.process.attendance', ['date' => $nextDate]) }}" aria-label="Tanggal berikutnya">
-                    <i data-lucide="chevron-right" class="nav-icon"></i>
-                </a>
+
+                {{-- Date picker form bar --}}
+                <form class="attendance-date-form" method="get" action="{{ route('alpha.process.attendance') }}">
+                    <label for="attendance-date-picker">Pilih tanggal</label>
+                    <input id="attendance-date-picker" type="date" name="date" value="{{ $selectedDate->toDateString() }}" data-attendance-date-picker>
+                    <button class="btn ghost" type="submit">Tampilkan</button>
+                </form>
             </div>
 
             <div class="attendance-session-list">
@@ -949,3 +964,143 @@
         </section>
     @endif
 @endsection
+
+@push('scripts')
+<script type="module">
+(function () {
+    const canvas = document.getElementById('attendance-canvas');
+    if (!canvas) return;
+
+    // --- Tiny WebGL particle renderer (no Three.js CDN needed) ---
+    const container = document.getElementById('attendance-date-card');
+    if (!container) return;
+
+    const gl = canvas.getContext('webgl', { alpha: true, antialias: false });
+    if (!gl) return;
+
+    function resize() {
+        const rect = container.getBoundingClientRect();
+        canvas.width  = rect.width  * devicePixelRatio;
+        canvas.height = rect.height * devicePixelRatio;
+        gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+    resize();
+    new ResizeObserver(resize).observe(container);
+
+    // Vertex shader
+    const vsSource = `
+        attribute vec2 a_pos;
+        attribute float a_size;
+        attribute float a_alpha;
+        varying float v_alpha;
+        void main() {
+            gl_Position = vec4(a_pos, 0.0, 1.0);
+            gl_PointSize = a_size;
+            v_alpha = a_alpha;
+        }
+    `;
+    // Fragment shader
+    const fsSource = `
+        precision mediump float;
+        varying float v_alpha;
+        void main() {
+            float d = length(gl_PointCoord - vec2(0.5));
+            if (d > 0.5) discard;
+            float a = smoothstep(0.5, 0.1, d) * v_alpha;
+            gl_FragColor = vec4(1.0, 1.0, 1.0, a);
+        }
+    `;
+
+    function compile(type, src) {
+        const s = gl.createShader(type);
+        gl.shaderSource(s, src);
+        gl.compileShader(s);
+        return s;
+    }
+    const prog = gl.createProgram();
+    gl.attachShader(prog, compile(gl.VERTEX_SHADER, vsSource));
+    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, fsSource));
+    gl.linkProgram(prog);
+    gl.useProgram(prog);
+
+    const COUNT = 60;
+    const px  = new Float32Array(COUNT);
+    const py  = new Float32Array(COUNT);
+    const vx  = new Float32Array(COUNT);
+    const vy  = new Float32Array(COUNT);
+    const sz  = new Float32Array(COUNT);
+    const al  = new Float32Array(COUNT);
+
+    for (let i = 0; i < COUNT; i++) {
+        px[i] = Math.random() * 2 - 1;
+        py[i] = Math.random() * 2 - 1;
+        vx[i] = (Math.random() - 0.5) * 0.003;
+        vy[i] = (Math.random() - 0.5) * 0.003;
+        sz[i] = 2 + Math.random() * 5;
+        al[i] = 0.15 + Math.random() * 0.45;
+    }
+
+    const posData  = new Float32Array(COUNT * 2);
+    const sizeData = new Float32Array(COUNT);
+    const alphaData = new Float32Array(COUNT);
+
+    const posBuf   = gl.createBuffer();
+    const sizeBuf  = gl.createBuffer();
+    const alphaBuf = gl.createBuffer();
+
+    const aPos   = gl.getAttribLocation(prog, 'a_pos');
+    const aSize  = gl.getAttribLocation(prog, 'a_size');
+    const aAlpha = gl.getAttribLocation(prog, 'a_alpha');
+
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    let raf;
+    function frame() {
+        for (let i = 0; i < COUNT; i++) {
+            px[i] += vx[i];
+            py[i] += vy[i];
+            if (px[i] > 1.1)  px[i] = -1.1;
+            if (px[i] < -1.1) px[i] =  1.1;
+            if (py[i] > 1.1)  py[i] = -1.1;
+            if (py[i] < -1.1) py[i] =  1.1;
+            posData[i * 2]     = px[i];
+            posData[i * 2 + 1] = py[i];
+            sizeData[i]  = sz[i] * devicePixelRatio;
+            alphaData[i] = al[i];
+        }
+
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, posData, gl.DYNAMIC_DRAW);
+        gl.enableVertexAttribArray(aPos);
+        gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, sizeBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, sizeData, gl.DYNAMIC_DRAW);
+        gl.enableVertexAttribArray(aSize);
+        gl.vertexAttribPointer(aSize, 1, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, alphaBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, alphaData, gl.DYNAMIC_DRAW);
+        gl.enableVertexAttribArray(aAlpha);
+        gl.vertexAttribPointer(aAlpha, 1, gl.FLOAT, false, 0, 0);
+
+        gl.drawArrays(gl.POINTS, 0, COUNT);
+        raf = requestAnimationFrame(frame);
+    }
+
+    // Only animate when visible
+    const obs = new IntersectionObserver(entries => {
+        if (entries[0].isIntersecting) {
+            raf = requestAnimationFrame(frame);
+        } else {
+            cancelAnimationFrame(raf);
+        }
+    }, { threshold: 0.1 });
+    obs.observe(canvas);
+})();
+</script>
+@endpush

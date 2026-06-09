@@ -1344,79 +1344,156 @@ textarea:focus {
     line-height: 1.05;
 }
 
+/* === Attendance Date Card (Redesigned) === */
 .attendance-date-card {
-    min-height: 86px;
-    border-radius: 8px;
-    background: linear-gradient(135deg, #87ceeb 0%, #9caf88 100%);
+    position: relative;
+    border-radius: var(--radius-xl);
+    background: linear-gradient(135deg, #0c4a6e 0%, #0369a1 50%, #075985 100%);
     color: #ffffff;
-    display: grid;
-    grid-template-columns: 58px minmax(0, 1fr) 58px;
-    align-items: center;
-    box-shadow: 0 14px 28px rgba(73, 136, 152, .2);
     overflow: hidden;
+    box-shadow: 0 16px 40px rgba(3, 105, 161, .3);
+    display: flex;
+    flex-direction: column;
+    gap: 0;
 }
 
-.attendance-date-card div {
+/* Three.js canvas overlay */
+.attendance-date-card canvas {
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+    pointer-events: none;
+    opacity: 0.35;
+    border-radius: inherit;
+}
+
+/* Top row: prev / date info / next */
+.attendance-date-nav {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr) 56px;
+    align-items: center;
+    min-height: 96px;
+    position: relative;
+    z-index: 1;
+}
+
+.attendance-date-info {
     text-align: center;
     display: grid;
-    gap: 4px;
+    gap: 3px;
+    padding: 16px 8px 12px;
 }
 
-.attendance-date-card span {
+.attendance-date-card .date-day {
+    font-size: .78rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, .7);
+}
+
+.attendance-date-card .date-today-badge {
+    display: inline-block;
+    background: rgba(251, 191, 36, .9);
+    color: #7c2d12;
+    font-size: .65rem;
     font-weight: 800;
-    color: rgba(255, 255, 255, .86);
-    font-size: .95rem;
+    letter-spacing: 0.05em;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    margin-left: 6px;
+    vertical-align: middle;
 }
 
-.attendance-date-card strong {
-    font-size: clamp(1.35rem, 3vw, 1.85rem);
+.attendance-date-card .date-main {
+    font-size: clamp(1.6rem, 3.5vw, 2.2rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
     line-height: 1;
+    color: #ffffff;
 }
 
+/* Bottom row: date picker form */
 .attendance-date-form {
-    margin: 10px auto 0;
-    width: min(100%, 360px);
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
     gap: 8px;
-    align-items: end;
+    padding: 10px 14px 14px;
+    border-top: 1px solid rgba(255, 255, 255, .12);
+    background: rgba(0, 0, 0, .08);
 }
 
 .attendance-date-form label {
-    grid-column: 1 / -1;
-    color: rgba(255, 255, 255, .86);
-    font-size: .76rem;
-    font-weight: 800;
+    flex: 0 0 auto;
+    color: rgba(255, 255, 255, .75);
+    font-size: .75rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
 }
 
-.attendance-date-form input {
+.attendance-date-form input[type="date"] {
+    flex: 1 1 auto;
     min-height: 36px;
-    border-color: rgba(255, 255, 255, .58);
-    background: rgba(255, 255, 255, .94);
-    color: var(--ink);
+    border: 1.5px solid rgba(255, 255, 255, .3);
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, .15);
+    color: #ffffff;
+    padding: 6px 10px;
+    font-size: .85rem;
+    backdrop-filter: blur(4px);
+    transition: border-color .2s ease, background .2s ease;
+    width: auto;
+}
+
+.attendance-date-form input[type="date"]:focus {
+    border-color: rgba(251, 191, 36, .8);
+    background: rgba(255, 255, 255, .22);
+    box-shadow: 0 0 0 3px rgba(251, 191, 36, .2);
+}
+
+.attendance-date-form input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1) opacity(.7);
+    cursor: pointer;
 }
 
 .attendance-date-form .btn {
+    flex: 0 0 auto;
     min-height: 36px;
-    border-color: rgba(255, 255, 255, .64);
-    background: rgba(255, 255, 255, .2);
-    color: #ffffff;
+    padding: 6px 14px;
+    border-radius: var(--radius-full);
+    border: 1.5px solid rgba(251, 191, 36, .6);
+    background: rgba(251, 191, 36, .2);
+    color: #fef3c7;
+    font-size: .82rem;
+    font-weight: 700;
     box-shadow: none;
+    white-space: nowrap;
+    backdrop-filter: blur(4px);
+    transition: background .18s ease, border-color .18s ease;
 }
 
 .attendance-date-form .btn:hover {
-    background: rgba(255, 255, 255, .32);
+    background: rgba(251, 191, 36, .35);
+    border-color: rgba(251, 191, 36, .9);
+    transform: none;
+    box-shadow: none;
 }
 
 .attendance-date-arrow {
-    min-height: 86px;
     display: grid;
     place-items: center;
-    color: #fff;
+    align-self: stretch;
+    color: rgba(255, 255, 255, .8);
+    transition: background .18s ease, color .18s ease;
 }
 
 .attendance-date-arrow:hover {
-    background: rgba(255, 255, 255, .09);
+    background: rgba(255, 255, 255, .1);
+    color: #ffffff;
 }
 
 .attendance-session-list {
