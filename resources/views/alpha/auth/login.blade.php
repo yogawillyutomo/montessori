@@ -10,6 +10,9 @@
     <link rel="stylesheet" href="{{ asset('css/alpha.css') }}?v={{ filemtime(public_path('css/alpha.css')) }}">
 </head>
 <body class="login-page">
+    <div class="bg-blob blob-1"></div>
+    <div class="bg-blob blob-2"></div>
+    <div class="bg-blob blob-3"></div>
     <main class="login-shell">
         <section class="login-card">
             <div class="login-brand">

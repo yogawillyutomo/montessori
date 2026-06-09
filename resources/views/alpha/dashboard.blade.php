@@ -25,7 +25,7 @@
     </div>
 
     <div class="grid two">
-        <section class="panel">
+        <section class="panel panel-binder">
             <div class="line-head">
                 <div>
                     <h3>Progress Area Perkembangan</h3>
@@ -45,7 +45,7 @@
             </div>
         </section>
 
-        <section class="panel">
+        <section class="panel panel-tape">
             <h3>Alur Sistem</h3>
             <div class="card-list" style="margin-top: 14px">
                 <div class="line-card">
@@ -65,7 +65,7 @@
     </div>
 
     <div class="grid two">
-        <section class="panel">
+        <section class="panel panel-binder">
             <h3>Status Kelas</h3>
             <div class="table-wrap" style="margin-top: 14px">
                 <table>
@@ -93,7 +93,7 @@
             </div>
         </section>
 
-        <section class="panel">
+        <section class="panel panel-binder">
             <h3>Presensi Terakhir</h3>
             <div class="card-list" style="margin-top: 14px">
                 @forelse ($sessions as $session)
@@ -122,7 +122,7 @@
         </section>
     </div>
 
-    <section class="panel">
+    <section class="panel panel-binder">
         <h3>Perlu Stimulasi / ILP</h3>
         <div class="table-wrap" style="margin-top: 14px">
             <table>
