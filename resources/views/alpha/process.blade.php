@@ -19,7 +19,9 @@
                     <h3>Slot Mingguan</h3>
                     <div class="meta">Template slot berulang untuk jam, ruangan, level, dan peserta. Perubahan jadwal dilakukan dari sini.</div>
                 </div>
-                <button class="btn primary" type="button" data-modal-target="modal-create-schedule">Tambah Jadwal</button>
+                @if ($canManageSchedules)
+                    <button class="btn primary" type="button" data-modal-target="modal-create-schedule">Tambah Jadwal</button>
+                @endif
             </div>
             <div class="schedule-grid" style="margin-top: 14px">
                 @foreach ([1, 2, 3, 4, 5, 6] as $day)
@@ -113,16 +115,17 @@
                                 </dialog>
                                 <div class="toolbar compact-actions">
                                     <button class="btn ghost" type="button" data-modal-target="{{ $studentModalId }}">Detail Siswa</button>
-                                    <form method="post" action="{{ route('alpha.process.schedules.toggle', $schedule) }}">
-                                        @csrf
-                                        @method('patch')
-                                        <button class="btn ghost" type="submit">{{ $schedule->is_active ? 'Nonaktifkan' : 'Aktifkan' }}</button>
-                                    </form>
-                                    <button class="btn ghost" type="button" data-modal-target="modal-edit-schedule-{{ $schedule->id }}">Edit</button>
-                                    <dialog class="modal wide-modal" id="modal-edit-schedule-{{ $schedule->id }}">
-                                        <form method="post" action="{{ route('alpha.process.schedules.update', $schedule) }}">
+                                    @if ($canManageSchedules)
+                                        <form method="post" action="{{ route('alpha.process.schedules.toggle', $schedule) }}">
                                             @csrf
                                             @method('patch')
+                                            <button class="btn ghost" type="submit">{{ $schedule->is_active ? 'Nonaktifkan' : 'Aktifkan' }}</button>
+                                        </form>
+                                        <button class="btn ghost" type="button" data-modal-target="modal-edit-schedule-{{ $schedule->id }}">Edit</button>
+                                        <dialog class="modal wide-modal" id="modal-edit-schedule-{{ $schedule->id }}">
+                                            <form method="post" action="{{ route('alpha.process.schedules.update', $schedule) }}">
+                                                @csrf
+                                                @method('patch')
                                             <div class="modal-head">
                                                 <div>
                                                     <h3>Edit Jadwal</h3>
@@ -203,9 +206,10 @@
                                                 <button class="btn ghost" type="button" data-modal-close>Batal</button>
                                                 <button class="btn primary" type="submit">Update Jadwal</button>
                                             </div>
-                                        </form>
-                                    </dialog>
-                                    <button class="btn danger" type="button" data-delete-action="{{ route('alpha.process.schedules.destroy', $schedule) }}" data-delete-label="Hapus jadwal {{ $dayLabels[$schedule->day_of_week] }} {{ $start }}-{{ $end }}? Jadwal tidak bisa dihapus jika sudah pernah dibuat menjadi presensi.">Hapus</button>
+                                            </form>
+                                        </dialog>
+                                        <button class="btn danger" type="button" data-delete-action="{{ route('alpha.process.schedules.destroy', $schedule) }}" data-delete-label="Hapus jadwal {{ $dayLabels[$schedule->day_of_week] }} {{ $start }}-{{ $end }}? Jadwal tidak bisa dihapus jika sudah pernah dibuat menjadi presensi.">Hapus</button>
+                                    @endif
                                 </div>
                                 </div>
                             @empty
@@ -216,8 +220,9 @@
                 @endforeach
             </div>
         </section>
-        <dialog class="modal wide-modal" id="modal-create-schedule">
-            <form method="post" action="{{ route('alpha.process.schedules.store') }}">
+        @if ($canManageSchedules)
+            <dialog class="modal wide-modal" id="modal-create-schedule">
+                <form method="post" action="{{ route('alpha.process.schedules.store') }}">
                 @csrf
                 <div class="modal-head">
                     <div>
@@ -299,8 +304,9 @@
                     <button class="btn ghost" type="button" data-modal-close>Batal</button>
                     <button class="btn primary" type="submit">Simpan Slot</button>
                 </div>
-            </form>
-        </dialog>
+                </form>
+            </dialog>
+        @endif
     @endif
 
     @if ($processSection === 'sessions')
@@ -383,7 +389,9 @@
                                 </div>
                                 <div class="meta">{{ $session->room ?: 'Ruangan belum diisi' }} | {{ $session->teacher->name }}</div>
                             </div>
-                            <button class="btn primary" type="button" data-modal-target="{{ $sessionAttendanceModal }}">Isi Presensi</button>
+                            @if ($canWriteProcess)
+                                <button class="btn primary" type="button" data-modal-target="{{ $sessionAttendanceModal }}">Isi Presensi</button>
+                            @endif
                         </div>
 
                         <div class="attendance-session-actions">
@@ -416,8 +424,10 @@
 
                         <div class="toolbar compact-actions attendance-card-footer">
                             <button class="btn ghost" type="button" data-modal-target="{{ $sessionDetailModal }}">Detail</button>
-                            <button class="btn ghost" type="button" data-modal-target="{{ $sessionAttendanceModal }}">Edit Presensi</button>
-                            <button class="btn danger" type="button" data-delete-action="{{ route('alpha.process.sessions.destroy', $session) }}" data-delete-label="Hapus presensi {{ $session->schoolClass->name }} tanggal {{ $session->session_date->format('d M Y') }}? Presensi tidak bisa dihapus jika sudah punya observasi.">Hapus</button>
+                            @if ($canWriteProcess)
+                                <button class="btn ghost" type="button" data-modal-target="{{ $sessionAttendanceModal }}">Edit Presensi</button>
+                                <button class="btn danger" type="button" data-delete-action="{{ route('alpha.process.sessions.destroy', $session) }}" data-delete-label="Hapus presensi {{ $session->schoolClass->name }} tanggal {{ $session->session_date->format('d M Y') }}? Presensi tidak bisa dihapus jika sudah punya observasi.">Hapus</button>
+                            @endif
                         </div>
                     </article>
 
@@ -480,8 +490,9 @@
                         </div>
                     </dialog>
 
-                    <dialog class="modal wide-modal" id="{{ $sessionAttendanceModal }}">
-                        <form method="post" action="{{ route('alpha.process.sessions.attendance', $session) }}">
+                    @if ($canWriteProcess)
+                        <dialog class="modal wide-modal" id="{{ $sessionAttendanceModal }}">
+                            <form method="post" action="{{ route('alpha.process.sessions.attendance', $session) }}">
                             @csrf
                             @method('patch')
                             <div class="modal-head">
@@ -522,8 +533,9 @@
                                 <button class="btn ghost" type="button" data-modal-close>Batal</button>
                                 <button class="btn primary" type="submit">Simpan Presensi</button>
                             </div>
-                        </form>
-                    </dialog>
+                            </form>
+                        </dialog>
+                    @endif
                 @empty
                     <div class="attendance-empty">
                         <div class="attendance-empty-icon">
@@ -539,15 +551,18 @@
                 <a class="btn ghost calendar-button" href="{{ route('alpha.process.attendance', ['date' => now()->toDateString()]) }}" aria-label="Kembali ke hari ini">
                     <i data-lucide="calendar-days" class="nav-icon"></i>
                 </a>
-                <button class="btn primary attendance-start-button" type="button" data-modal-target="modal-create-session">
-                    <i data-lucide="plus-circle" class="nav-icon"></i>
-                    Buat Presensi
-                </button>
+                @if ($canWriteProcess)
+                    <button class="btn primary attendance-start-button" type="button" data-modal-target="modal-create-session">
+                        <i data-lucide="plus-circle" class="nav-icon"></i>
+                        Buat Presensi
+                    </button>
+                @endif
             </div>
         </section>
 
-        <dialog class="modal wide-modal" id="modal-create-session">
-            <form method="post" action="{{ route('alpha.sessions.create-from-schedule') }}">
+        @if ($canWriteProcess)
+            <dialog class="modal wide-modal" id="modal-create-session">
+                <form method="post" action="{{ route('alpha.sessions.create-from-schedule') }}">
                 @csrf
                 <div class="modal-head">
                     <div>
@@ -580,8 +595,9 @@
                     <button class="btn ghost" type="button" data-modal-close>Batal</button>
                     <button class="btn primary" type="submit">Buat Presensi</button>
                 </div>
-            </form>
-        </dialog>
+                </form>
+            </dialog>
+        @endif
     @endif
 
     @if ($processSection === 'observations')
@@ -610,8 +626,9 @@
             </div>
 
             <script type="application/json" id="monitoring-snapshots-json">@json($monitoringSnapshots)</script>
-            <form method="post" action="{{ route('alpha.observations.store') }}" style="margin-top: 14px" data-observation-monitoring-form>
-                @csrf
+            @if ($canWriteProcess)
+                <form method="post" action="{{ route('alpha.observations.store') }}" style="margin-top: 14px" data-observation-monitoring-form>
+                    @csrf
                 <div class="observation-context-grid">
                     <div class="field">
                         <label for="class_session_id">Presensi</label>
@@ -749,7 +766,10 @@
                     <button class="btn primary" type="submit">Simpan Monitoring</button>
                     <button class="btn ghost" type="reset">Reset pilihan</button>
                 </div>
-            </form>
+                </form>
+            @else
+                <div class="notice" style="margin-top: 14px">Mode monitoring aktif. Observasi harian hanya dapat diinput oleh guru atau admin.</div>
+            @endif
         </section>
 
         <section class="panel">
@@ -896,13 +916,16 @@
                             </div>
                         </div>
 
-                        <div class="toolbar compact-actions">
-                            <button class="btn primary" type="button" data-modal-target="{{ $editIlpModal }}">Edit ILP</button>
-                        </div>
+                        @if ($canWriteProcess)
+                            <div class="toolbar compact-actions">
+                                <button class="btn primary" type="button" data-modal-target="{{ $editIlpModal }}">Edit ILP</button>
+                            </div>
+                        @endif
                     </article>
 
-                    <dialog class="modal wide-modal" id="{{ $editIlpModal }}">
-                        <form method="post" action="{{ route('alpha.process.ilp.update', $plan) }}">
+                    @if ($canWriteProcess)
+                        <dialog class="modal wide-modal" id="{{ $editIlpModal }}">
+                            <form method="post" action="{{ route('alpha.process.ilp.update', $plan) }}">
                             @csrf
                             @method('patch')
                             <input type="hidden" name="_modal" value="{{ $editIlpModal }}">
@@ -949,8 +972,9 @@
                                 <button class="btn ghost" type="button" data-modal-close>Batal</button>
                                 <button class="btn primary" type="submit">Simpan ILP</button>
                             </div>
-                        </form>
-                    </dialog>
+                            </form>
+                        </dialog>
+                    @endif
                 @empty
                     <div class="attendance-empty">
                         <div class="attendance-empty-icon">

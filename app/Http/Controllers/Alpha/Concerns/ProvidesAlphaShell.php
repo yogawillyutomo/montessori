@@ -2,20 +2,11 @@
 
 namespace App\Http\Controllers\Alpha\Concerns;
 
+use App\Support\Alpha\Role;
 use Illuminate\Http\Request;
 
 trait ProvidesAlphaShell
 {
-    /**
-     * @var array<string, string>
-     */
-    private array $roles = [
-        'super_admin' => 'Super Admin',
-        'admin' => 'Admin',
-        'teacher' => 'Guru',
-        'parent' => 'Orangtua',
-    ];
-
     /**
      * @return array<string, mixed>
      */
@@ -27,8 +18,8 @@ trait ProvidesAlphaShell
         return [
             'activeMenu' => $activeMenu,
             'activeRole' => $role,
-            'roles' => $this->roles,
-            'roleLabel' => $this->roles[$role] ?? str($role)->headline()->toString(),
+            'roles' => Role::labels(),
+            'roleLabel' => Role::label($role),
             'currentUser' => $user,
             'statusLabels' => $this->statusLabels(),
             'dayLabels' => $this->dayLabels(),
@@ -54,9 +45,12 @@ trait ProvidesAlphaShell
             'sick' => 'Sakit',
             'excused' => 'Izin',
             'draft' => 'Draft',
+            'reviewed' => 'Sudah direview',
+            'approved' => 'Disetujui',
             'in_progress' => 'Berjalan',
             'empty' => 'Belum ada data',
-            'published' => 'Publish',
+            'published' => 'Dipublish',
+            'archived' => 'Diarsipkan',
         ];
     }
 

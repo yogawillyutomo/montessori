@@ -27,10 +27,12 @@
                 @endif
             </div>
         </div>
-        <form method="post" action="{{ route('alpha.reports.generate') }}">
-            @csrf
-            <button class="btn primary" type="submit">Generate ulang draft rapor</button>
-        </form>
+        @if ($canGenerateReport)
+            <form method="post" action="{{ route('alpha.reports.generate') }}">
+                @csrf
+                <button class="btn primary" type="submit">Generate ulang draft rapor</button>
+            </form>
+        @endif
     </div>
 
     <section class="panel">
@@ -133,21 +135,29 @@
     </section>
 
     <section class="panel">
-        <h3>Workflow Rapor</h3>
-        <div class="grid three" style="margin-top: 14px">
-            <div class="line-card">
-                <strong>1. Sistem generate draft</strong>
-                <div class="meta">Biodata, area perkembangan, indikator prioritas, presensi, dan narasi awal diisi otomatis.</div>
+        @if ($isParentView)
+            <h3>Rapor Anak</h3>
+            <div class="line-card" style="margin-top: 14px">
+                <strong>Rapor yang tampil sudah dipublish sekolah.</strong>
+                <div class="meta">Jika rapor terbaru belum muncul, berarti masih dalam proses review guru dan sekolah.</div>
             </div>
-            <div class="line-card">
-                <strong>2. Guru edit narasi</strong>
-                <div class="meta">Guru merapikan bahasa rapor dan menambahkan konteks observasi.</div>
+        @else
+            <h3>Workflow Rapor</h3>
+            <div class="grid three" style="margin-top: 14px">
+                <div class="line-card">
+                    <strong>1. Sistem generate draft</strong>
+                    <div class="meta">Biodata, area perkembangan, indikator prioritas, presensi, dan narasi awal diisi otomatis.</div>
+                </div>
+                <div class="line-card">
+                    <strong>2. Guru edit narasi</strong>
+                    <div class="meta">Guru merapikan bahasa rapor dan menambahkan konteks observasi.</div>
+                </div>
+                <div class="line-card">
+                    <strong>3. Admin review & publish</strong>
+                    <div class="meta">Setelah disetujui, rapor bisa dicetak PDF atau dibuka orangtua.</div>
+                </div>
             </div>
-            <div class="line-card">
-                <strong>3. Admin review & publish</strong>
-                <div class="meta">Setelah disetujui, rapor bisa dicetak PDF atau dibuka orangtua.</div>
-            </div>
-        </div>
+        @endif
     </section>
 
     <section class="panel">
@@ -177,7 +187,7 @@
                     @endforeach
                 </select>
             </div>
-            @unless ($isTeacherScoped)
+            @if ($canUseTeacherFilter)
                 <div class="field">
                     <label for="report-teacher-id">Guru terjadwal</label>
                     <select id="report-teacher-id" name="teacher_id">
@@ -187,16 +197,18 @@
                         @endforeach
                     </select>
                 </div>
+            @endif
+            @unless ($isParentView)
+                <div class="field">
+                    <label for="report-status">Status</label>
+                    <select id="report-status" name="status">
+                        <option value="">Semua status</option>
+                        @foreach (['draft', 'reviewed', 'approved', 'published', 'archived', 'empty'] as $status)
+                            <option value="{{ $status }}" @selected($reportFilters['status'] === $status)>{{ $statusLabels[$status] ?? $status }}</option>
+                        @endforeach
+                    </select>
+                </div>
             @endunless
-            <div class="field">
-                <label for="report-status">Status</label>
-                <select id="report-status" name="status">
-                    <option value="">Semua status</option>
-                    @foreach (['draft', 'empty', 'published'] as $status)
-                        <option value="{{ $status }}" @selected($reportFilters['status'] === $status)>{{ $statusLabels[$status] ?? $status }}</option>
-                    @endforeach
-                </select>
-            </div>
             <div class="toolbar" style="align-self: end">
                 <button class="btn primary" type="submit">Terapkan</button>
                 <a class="btn ghost" href="{{ route('alpha.reports') }}">Reset</a>

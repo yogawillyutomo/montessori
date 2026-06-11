@@ -4,8 +4,8 @@ namespace Database\Seeders;
 
 use App\Models\AcademicYear;
 use App\Models\Attendance;
-use App\Models\ClassSession;
 use App\Models\ClassLevel;
+use App\Models\ClassSession;
 use App\Models\DevelopmentArea;
 use App\Models\Guardian;
 use App\Models\IlpPlan;
@@ -17,6 +17,7 @@ use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\Term;
 use App\Models\User;
+use App\Models\WeeklySchedule;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 
@@ -28,16 +29,22 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $users = [
-            'super_admin' => User::query()->updateOrCreate(['email' => 'super@montessori.test'], [
-                'name' => 'Direktur Sekolah',
+            'super_admin' => User::query()->updateOrCreate(['email' => 'admin@montessori.test'], [
+                'name' => 'Super Admin Montessori',
                 'password' => 'password',
                 'role' => 'super_admin',
                 'is_active' => true,
             ]),
-            'admin' => User::query()->updateOrCreate(['email' => 'admin@montessori.test'], [
+            'admin' => User::query()->updateOrCreate(['email' => 'ops@montessori.test'], [
                 'name' => 'Admin Operasional',
                 'password' => 'password',
                 'role' => 'admin',
+                'is_active' => true,
+            ]),
+            'principal' => User::query()->updateOrCreate(['email' => 'principal@montessori.test'], [
+                'name' => 'Kepala Sekolah',
+                'password' => 'password',
+                'role' => 'principal',
                 'is_active' => true,
             ]),
             'teacher_raras' => User::query()->updateOrCreate(['email' => 'raras@montessori.test'], [
@@ -361,7 +368,7 @@ class DatabaseSeeder extends Seeder
         ];
 
         foreach ($schedules as $key => $row) {
-            $schedule = \App\Models\WeeklySchedule::query()->updateOrCreate([
+            $schedule = WeeklySchedule::query()->updateOrCreate([
                 'school_class_id' => $classes[$row['class']]->id,
                 'day_of_week' => $row['day'],
                 'starts_at' => $row['start'],

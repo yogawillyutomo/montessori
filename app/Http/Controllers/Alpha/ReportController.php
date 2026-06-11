@@ -12,6 +12,8 @@ use App\Models\SchoolClass;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\Term;
+use App\Services\Alpha\AccessScopeService;
+use App\Support\Alpha\Role;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -22,43 +24,54 @@ class ReportController extends Controller
 
     public function index(Request $request): View
     {
+        $user = $request->user();
+        $scope = app(AccessScopeService::class);
         $currentTerm = Term::query()->where('is_current', true)->with('academicYear')->first();
         $startsOn = $request->date('starts_on') ?? $currentTerm?->starts_on;
         $endsOn = $request->date('ends_on') ?? $currentTerm?->ends_on;
         $classId = $request->integer('school_class_id') ?: null;
-        $accessibleStudentIds = $this->accessibleStudentIds($request);
-        $teacher = $this->teacherForRequest($request);
-        $reportTeacherId = $teacher?->id ?? ($request->integer('teacher_id') ?: null);
+        $accessibleStudentIds = $user ? $scope->accessibleStudentIds($user) : [];
+        $teacher = $user ? $scope->teacherFor($user) : null;
+        $canUseTeacherFilter = $user && $scope->hasGlobalDataAccess($user);
+        $reportTeacherId = $teacher?->id ?? ($canUseTeacherFilter ? ($request->integer('teacher_id') ?: null) : null);
         $reportStatus = $request->string('status')->toString() ?: null;
         $reportSearch = $request->string('q')->trim()->toString() ?: null;
-        $reportStudentIds = $accessibleStudentIds ?? ($reportTeacherId ? $this->studentIdsScheduledWithTeacher($reportTeacherId) : null);
+        $reportStudentIds = $reportTeacherId
+            ? $scope->studentIdsScheduledWithTeacher($reportTeacherId)
+            : $accessibleStudentIds;
+        $isParent = $user?->role === Role::PARENT;
 
         return view('alpha.reports', [
             ...$this->shell($request, 'reports'),
             'reports' => Report::query()
                 ->with(['student.schoolClass', 'student.guardian', 'term.academicYear', 'homeroomTeacher'])
-                ->when($reportStudentIds !== null, fn ($query) => $query->whereIn('student_id', $reportStudentIds))
+                ->whereIn('student_id', $reportStudentIds)
                 ->when($classId, fn ($query) => $query->whereHas('student', fn ($studentQuery) => $studentQuery->where('school_class_id', $classId)))
-                ->when($reportStatus, fn ($query) => $query->where('status', $reportStatus))
+                ->when($isParent, fn ($query) => $query->where('status', 'published'))
+                ->when(! $isParent && $reportStatus, fn ($query) => $query->where('status', $reportStatus))
                 ->when($reportSearch, fn ($query) => $query->whereHas('student', function ($studentQuery) use ($reportSearch): void {
                     $studentQuery
                         ->where('name', 'like', "%{$reportSearch}%")
                         ->orWhere('code', 'like', "%{$reportSearch}%");
                 }))
-                ->orderByRaw("case status when 'draft' then 1 when 'empty' then 2 else 3 end")
+                ->orderByRaw("case status when 'draft' then 1 when 'reviewed' then 2 when 'approved' then 3 when 'published' then 4 when 'empty' then 5 else 6 end")
                 ->orderByDesc('generated_at')
                 ->get(),
             'currentTerm' => $currentTerm,
             'classes' => SchoolClass::naturalSort(
                 SchoolClass::query()
                     ->with('classLevel')
-                    ->when($reportStudentIds !== null, fn ($query) => $query->whereHas('students', fn ($studentQuery) => $studentQuery->whereIn('students.id', $reportStudentIds)))
+                    ->whereHas('students', fn ($studentQuery) => $studentQuery->whereIn('students.id', $reportStudentIds))
                     ->get()
             ),
-            'teachers' => Teacher::query()->where('is_active', true)->orderBy('name')->get(),
+            'teachers' => Teacher::query()
+                ->where('is_active', true)
+                ->when(! $canUseTeacherFilter, fn ($query) => $query->whereKey($teacher?->id ?? 0))
+                ->orderBy('name')
+                ->get(),
             'reportFilters' => [
                 'q' => $reportSearch,
-                'status' => $reportStatus,
+                'status' => $isParent ? 'published' : $reportStatus,
                 'teacher_id' => $reportTeacherId,
                 'school_class_id' => $classId,
             ],
@@ -69,15 +82,18 @@ class ReportController extends Controller
                 'school_class_id' => $classId,
             ],
             'attendanceRecap' => $this->attendanceRecap($startsOn?->toDateString(), $endsOn?->toDateString(), $classId, $reportStudentIds),
+            'canGenerateReport' => $user ? $scope->canGenerateReport($user) : false,
+            'canUseTeacherFilter' => $canUseTeacherFilter,
+            'isParentView' => $isParent,
         ]);
     }
 
     public function show(Request $request, Report $report): View
     {
         $report->load(['student.guardian', 'student.schoolClass.classLevel', 'term.academicYear', 'homeroomTeacher']);
-        $accessibleStudentIds = $this->accessibleStudentIds($request);
+        $scope = app(AccessScopeService::class);
 
-        abort_if($accessibleStudentIds !== null && ! in_array($report->student_id, $accessibleStudentIds, true), 403);
+        abort_if(! $request->user() || ! $scope->canViewReport($request->user(), $report), 403);
 
         $summary = $report->summary ?? [];
 
@@ -99,13 +115,16 @@ class ReportController extends Controller
 
     public function generate(Request $request): RedirectResponse
     {
+        $scope = app(AccessScopeService::class);
+        abort_if(! $request->user() || ! $scope->canGenerateReport($request->user()), 403);
+
         $term = Term::query()->where('is_current', true)->firstOrFail();
-        $teacher = $this->teacherForRequest($request) ?? Teacher::query()->orderBy('id')->first();
-        $accessibleStudentIds = $this->accessibleStudentIds($request);
+        $teacher = $scope->teacherFor($request->user()) ?? Teacher::query()->orderBy('id')->first();
+        $accessibleStudentIds = $scope->accessibleStudentIds($request->user());
 
         Student::query()
             ->with(['guardian', 'schoolClass.classLevel'])
-            ->when($accessibleStudentIds !== null, fn ($query) => $query->whereIn('id', $accessibleStudentIds))
+            ->whereIn('id', $accessibleStudentIds)
             ->each(function (Student $student) use ($term, $teacher): void {
                 $summary = $this->buildReportSummary($student, $term);
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Alpha;
 use App\Http\Controllers\Alpha\Concerns\ProvidesAlphaShell;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\Alpha\Role;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -14,25 +15,15 @@ class SettingController extends Controller
 {
     use ProvidesAlphaShell;
 
-    /**
-     * @var array<string, string>
-     */
-    private array $roleOptions = [
-        'super_admin' => 'Super Admin',
-        'admin' => 'Admin',
-        'teacher' => 'Guru',
-        'parent' => 'Orangtua',
-    ];
-
     public function users(Request $request): View
     {
         return view('alpha.settings.users', [
             ...$this->shell($request, 'settings.users'),
             'users' => User::query()
-                ->orderByRaw("case role when 'super_admin' then 1 when 'admin' then 2 when 'teacher' then 3 when 'parent' then 4 else 5 end")
+                ->orderByRaw("case role when 'super_admin' then 1 when 'admin' then 2 when 'principal' then 3 when 'teacher' then 4 when 'parent' then 5 else 6 end")
                 ->orderBy('name')
                 ->get(),
-            'roleOptions' => $this->roleOptions,
+            'roleOptions' => Role::labels(),
         ]);
     }
 
@@ -42,7 +33,7 @@ class SettingController extends Controller
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'max:160', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
-            'role' => ['required', Rule::in(array_keys($this->roleOptions))],
+            'role' => ['required', Rule::in(Role::all())],
             'phone' => ['nullable', 'string', 'max:40'],
             'is_active' => ['nullable', 'boolean'],
         ]);
@@ -60,7 +51,7 @@ class SettingController extends Controller
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'max:160', Rule::unique('users', 'email')->ignore($user->id)],
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
-            'role' => ['required', Rule::in(array_keys($this->roleOptions))],
+            'role' => ['required', Rule::in(Role::all())],
             'phone' => ['nullable', 'string', 'max:40'],
             'is_active' => ['nullable', 'boolean'],
         ]);
@@ -68,6 +59,12 @@ class SettingController extends Controller
         if ($request->user()?->is($user) && (! $request->boolean('is_active') || $validated['role'] !== $user->role)) {
             return back()->withErrors([
                 'user' => 'Akun yang sedang dipakai tidak bisa dinonaktifkan atau diganti role dari form ini.',
+            ])->withInput();
+        }
+
+        if ($user->role === Role::SUPER_ADMIN && $validated['role'] !== Role::SUPER_ADMIN && $this->isLastSuperAdmin($user)) {
+            return back()->withErrors([
+                'user' => 'Super Admin terakhir tidak bisa diganti role.',
             ])->withInput();
         }
 
@@ -110,8 +107,20 @@ class SettingController extends Controller
             return back()->withErrors(['user' => 'Akun yang sedang dipakai tidak bisa dihapus.']);
         }
 
+        if ($user->role === Role::SUPER_ADMIN && $this->isLastSuperAdmin($user)) {
+            return back()->withErrors(['user' => 'Super Admin terakhir tidak bisa dihapus.']);
+        }
+
         $user->delete();
 
         return back()->with('status', 'User berhasil dihapus.');
+    }
+
+    private function isLastSuperAdmin(User $user): bool
+    {
+        return User::query()
+            ->where('role', Role::SUPER_ADMIN)
+            ->whereKeyNot($user->id)
+            ->doesntExist();
     }
 }

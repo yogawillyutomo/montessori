@@ -1,27 +1,50 @@
 # Montessori Bloom
 
-Aplikasi operasional untuk monitoring kelas Montessori. Fokus saat ini adalah fondasi Laravel dengan migration, seed data, dan alur kerja yang memisahkan **Master Data**, **Proses Harian**, dan **Laporan/Rapor**.
+Montessori Bloom adalah aplikasi Laravel untuk manajemen pembelajaran Montessori: master data sekolah, jadwal mingguan, sesi kelas, presensi, observasi, ILP, dan draft rapor.
 
-## Fitur Operasional Awal
+Project ini masih fase alpha, tetapi struktur utamanya sudah disiapkan agar aman dikembangkan menuju production: route berbasis role, scope data per user, seeder demo, dan test authorization.
 
-- Dashboard monitoring operasional.
-- Master data kelas, siswa, orangtua, guru, area perkembangan, dan indikator.
-- Jadwal mingguan fleksibel.
-- Pembuatan presensi dari jadwal mingguan.
-- Input observasi per siswa dan indikator.
-- Draft ILP otomatis saat observasi berstatus perlu stimulasi.
-- Draft rapor otomatis dari data observasi.
-- Mode kerja role via dropdown sementara: Super Admin, Admin, Guru, Orangtua.
+## Fitur Utama
+
+- Dashboard monitoring sesuai data yang boleh diakses user.
+- Master data tahun ajaran, term, level, kelas, siswa, wali, guru, area perkembangan, dan indikator.
+- Jadwal mingguan fleksibel dengan peserta lintas kelas.
+- Pembuatan sesi/presensi dari jadwal mingguan.
+- Input presensi per siswa.
+- Observasi indikator perkembangan per sesi.
+- Draft ILP otomatis dari observasi yang butuh stimulasi.
+- Draft rapor otomatis dari observasi, presensi, dan ILP.
+- User dan login dengan role berbasis middleware.
+
+## Role Pengguna
+
+- `super_admin` - akses penuh, termasuk user dan role.
+- `admin` - operasional sekolah, master data, proses, import, dan generate rapor.
+- `teacher` - jadwal, sesi, presensi, observasi, ILP, dan rapor siswa yang terkait dengannya.
+- `parent` - data/rapor anak sendiri yang sudah dipublish.
+- `principal` - monitoring, rekap, dan akses laporan sekolah.
+
+## Tech Stack
+
+- Laravel 13
+- Blade
+- Tailwind CSS lewat Vite
+- SQLite untuk development lokal
+- Siap diarahkan ke MySQL/PostgreSQL dari `.env`
 
 ## Setup Lokal
 
 ```bash
 composer install
+npm install
 cp .env.example .env
 php artisan key:generate
-php artisan migrate:fresh --seed
+php artisan migrate --seed
+npm run dev
 php artisan serve
 ```
+
+Untuk SQLite lokal, file `database/database.sqlite` akan dibuat otomatis saat artisan/app berjalan.
 
 Jika port 8000 sedang dipakai:
 
@@ -29,7 +52,7 @@ Jika port 8000 sedang dipakai:
 php artisan serve --port=8010
 ```
 
-## Akun Demo
+## Akun Default Development
 
 Semua akun demo memakai password:
 
@@ -37,18 +60,46 @@ Semua akun demo memakai password:
 password
 ```
 
-- `super@montessori.test`
-- `admin@montessori.test`
-- `raras@montessori.test`
-- `mira@montessori.test`
-- `parent@montessori.test`
+- Super Admin: `admin@montessori.test`
+- Admin Operasional: `ops@montessori.test`
+- Kepala Sekolah: `principal@montessori.test`
+- Guru: `raras@montessori.test`
+- Guru: `mira@montessori.test`
+- Orang Tua: `parent@montessori.test`
 
-## Catatan Data
+Ganti password default sebelum dipakai di environment production.
 
-Workbook Excel asli tidak ikut disimpan di repository karena berisi data anak/orangtua. Struktur workbook dipakai sebagai acuan migration dan seeder.
+## Struktur Penting
+
+- `app/Http/Middleware/EnsureUserHasRole.php` - middleware role route.
+- `app/Services/Alpha/AccessScopeService.php` - scope data siswa, kelas, dan rapor per role.
+- `app/Support/Alpha/Role.php` - daftar role dan label tampilan.
+- `app/Http/Controllers/Alpha` - controller alpha app saat ini.
+- `resources/views/alpha` - Blade UI alpha.
+- `resources/views/errors` - halaman error production-friendly.
+- `database/seeders/DatabaseSeeder.php` - data demo dan akun awal.
+- `tests/Feature/AuthorizationTest.php` - test pembatasan akses.
+
+## Catatan Production
+
+- Set `APP_ENV=production` dan `APP_DEBUG=false`.
+- Jangan commit `.env`, database SQLite lokal, log, cache, `vendor`, `node_modules`, atau `public/build`.
+- Gunakan MySQL/PostgreSQL untuk production.
+- Jalankan migration dari pipeline/deploy yang terkontrol.
+- Pastikan akun Super Admin default sudah diganti passwordnya.
 
 ## Validasi
 
 ```bash
+php artisan optimize:clear
 php artisan test
 ```
+
+## Roadmap Singkat
+
+- Pecah controller besar menjadi controller per modul.
+- Pindahkan validasi ke Form Request.
+- Lengkapi workflow rapor: reviewed, approved, published, archived.
+- Tambahkan policy untuk Student, Report, Observation, ClassSession, dan User.
+- Perbaiki UX import dengan preview dan error per baris.
+- Tambahkan export/print PDF rapor.

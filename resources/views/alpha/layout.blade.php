@@ -12,31 +12,42 @@
 </head>
 <body>
 @php
+    $adminRoles = ['super_admin', 'admin'];
+    $processRoles = ['super_admin', 'admin', 'teacher', 'principal'];
+    $reportRoles = ['super_admin', 'admin', 'teacher', 'principal', 'parent'];
+
     $menus = [
         'Operasional' => [
-            ['key' => 'dashboard', 'label' => 'Dashboard', 'route' => 'alpha.dashboard', 'dot' => 'sage', 'icon' => 'layout-dashboard'],
+            ['key' => 'dashboard', 'label' => 'Dashboard', 'route' => 'alpha.dashboard', 'dot' => 'sage', 'icon' => 'layout-dashboard', 'roles' => $reportRoles],
         ],
         'Master Data' => [
-            ['key' => 'master.academic-years', 'label' => 'Tahun Ajaran', 'route' => 'alpha.master.academic-years', 'dot' => 'teal', 'icon' => 'calendar-days'],
-            ['key' => 'master.levels', 'label' => 'Level', 'route' => 'alpha.master.levels', 'dot' => 'teal', 'icon' => 'list-ordered'],
-            ['key' => 'master.classes', 'label' => 'Kelas', 'route' => 'alpha.master.classes', 'dot' => 'teal', 'icon' => 'school'],
-            ['key' => 'master.students', 'label' => 'Siswa & Orangtua', 'route' => 'alpha.master.students', 'dot' => 'teal', 'icon' => 'users'],
-            ['key' => 'master.teachers', 'label' => 'Guru', 'route' => 'alpha.master.teachers', 'dot' => 'teal', 'icon' => 'graduation-cap'],
-            ['key' => 'master.curriculum', 'label' => 'Kurikulum', 'route' => 'alpha.master.curriculum', 'dot' => 'teal', 'icon' => 'book-open'],
+            ['key' => 'master.academic-years', 'label' => 'Tahun Ajaran', 'route' => 'alpha.master.academic-years', 'dot' => 'teal', 'icon' => 'calendar-days', 'roles' => $adminRoles],
+            ['key' => 'master.levels', 'label' => 'Level Kelas', 'route' => 'alpha.master.levels', 'dot' => 'teal', 'icon' => 'list-ordered', 'roles' => $adminRoles],
+            ['key' => 'master.classes', 'label' => 'Kelas', 'route' => 'alpha.master.classes', 'dot' => 'teal', 'icon' => 'school', 'roles' => $adminRoles],
+            ['key' => 'master.students', 'label' => 'Siswa & Wali', 'route' => 'alpha.master.students', 'dot' => 'teal', 'icon' => 'users', 'roles' => $adminRoles],
+            ['key' => 'master.teachers', 'label' => 'Guru', 'route' => 'alpha.master.teachers', 'dot' => 'teal', 'icon' => 'graduation-cap', 'roles' => $adminRoles],
+            ['key' => 'master.curriculum', 'label' => 'Kurikulum & Indikator', 'route' => 'alpha.master.curriculum', 'dot' => 'teal', 'icon' => 'book-open', 'roles' => $adminRoles],
         ],
         'Proses' => [
-            ['key' => 'process.schedules', 'label' => 'Jadwal Mingguan', 'route' => 'alpha.process.schedules', 'dot' => 'coral', 'icon' => 'calendar'],
-            ['key' => 'process.sessions', 'label' => 'Presensi', 'route' => 'alpha.process.attendance', 'dot' => 'coral', 'icon' => 'clipboard-list'],
-            ['key' => 'process.observations', 'label' => 'Observasi', 'route' => 'alpha.process.observations', 'dot' => 'coral', 'icon' => 'clipboard-check'],
-            ['key' => 'process.ilp', 'label' => 'ILP / Remedial', 'route' => 'alpha.process.ilp', 'dot' => 'coral', 'icon' => 'target'],
+            ['key' => 'process.schedules', 'label' => 'Jadwal Mingguan', 'route' => 'alpha.process.schedules', 'dot' => 'coral', 'icon' => 'calendar', 'roles' => $processRoles],
+            ['key' => 'process.sessions', 'label' => 'Sesi & Presensi', 'route' => 'alpha.process.attendance', 'dot' => 'coral', 'icon' => 'clipboard-list', 'roles' => $processRoles],
+            ['key' => 'process.observations', 'label' => 'Observasi', 'route' => 'alpha.process.observations', 'dot' => 'coral', 'icon' => 'clipboard-check', 'roles' => $processRoles],
+            ['key' => 'process.ilp', 'label' => 'ILP', 'route' => 'alpha.process.ilp', 'dot' => 'coral', 'icon' => 'target', 'roles' => $processRoles],
         ],
         'Laporan' => [
-            ['key' => 'reports', 'label' => 'Draft rapor otomatis', 'route' => 'alpha.reports', 'dot' => 'blue', 'icon' => 'file-text'],
+            ['key' => 'reports', 'label' => 'Rapor & Rekap', 'route' => 'alpha.reports', 'dot' => 'blue', 'icon' => 'file-text', 'roles' => $reportRoles],
         ],
         'Setting' => [
-            ['key' => 'settings.users', 'label' => 'User & Login', 'route' => 'alpha.settings.users', 'dot' => 'plum', 'icon' => 'settings'],
+            ['key' => 'settings.users', 'label' => 'User & Login', 'route' => 'alpha.settings.users', 'dot' => 'plum', 'icon' => 'settings', 'roles' => ['super_admin']],
         ],
     ];
+
+    $visibleMenus = collect($menus)
+        ->map(fn ($items) => collect($items)->filter(
+            fn ($item) => in_array($activeRole, $item['roles'] ?? [], true)
+                && \Illuminate\Support\Facades\Route::has($item['route'])
+        ))
+        ->filter(fn ($items) => $items->isNotEmpty());
 @endphp
 <div class="app" id="app-shell">
     <aside class="sidebar" id="app-sidebar">
@@ -51,7 +62,7 @@
             </button>
         </div>
 
-        @foreach ($menus as $group => $items)
+        @foreach ($visibleMenus as $group => $items)
             <nav class="nav-group" aria-label="{{ $group }}">
                 <div class="nav-title">{{ $group }}</div>
                 @foreach ($items as $item)
@@ -88,7 +99,7 @@
                         <strong>{{ $currentUser?->name ?? $roleLabel }}</strong>
                         <span>{{ $roleLabel }}{{ $currentUser?->email ? ' | ' . $currentUser->email : '' }}</span>
                     </div>
-                    <button class="btn ghost" type="button" data-modal-target="modal-profile">Profile</button>
+                    <button class="btn ghost" type="button" data-modal-target="modal-profile">Profil</button>
                     <form method="post" action="{{ route('logout') }}">
                         @csrf
                         <button class="btn danger" type="submit">Logout</button>
@@ -124,7 +135,7 @@
             @method('patch')
             <div class="modal-head">
                 <div>
-                    <h3>Edit Profile</h3>
+                    <h3>Edit Profil</h3>
                     <div class="meta">Perbarui data login dan password akun sendiri.</div>
                 </div>
                 <button class="icon-btn" type="button" data-modal-close aria-label="Tutup">
@@ -159,7 +170,7 @@
             </div>
             <div class="toolbar modal-actions">
                 <button class="btn ghost" type="button" data-modal-close>Batal</button>
-                <button class="btn primary" type="submit">Simpan Profile</button>
+                <button class="btn primary" type="submit">Simpan Profil</button>
             </div>
         </form>
     </dialog>

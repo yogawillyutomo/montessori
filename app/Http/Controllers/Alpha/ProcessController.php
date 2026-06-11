@@ -13,6 +13,7 @@ use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\Term;
 use App\Models\WeeklySchedule;
+use App\Services\Alpha\AccessScopeService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -114,6 +115,7 @@ class ProcessController extends Controller
         ]);
 
         $schedule = WeeklySchedule::query()->with('students')->findOrFail($validated['weekly_schedule_id']);
+        $this->authorizeTeacherSchedule($request, $schedule);
         $sessionDate = Carbon::parse($validated['session_date']);
 
         if (! $schedule->is_active) {
@@ -171,6 +173,7 @@ class ProcessController extends Controller
 
     public function updateSession(Request $request, ClassSession $classSession): RedirectResponse
     {
+        $this->authorizeTeacherSession($request, $classSession);
         $validated = $this->sessionRules($request);
         $validated['room'] = $this->normalizeRoom($validated['room'] ?? null);
         $validated['capacity'] = $this->resolveCapacity($validated['capacity'] ?? null, (int) $validated['school_class_id']);
@@ -205,6 +208,7 @@ class ProcessController extends Controller
 
     public function updateSessionAttendance(Request $request, ClassSession $classSession): RedirectResponse
     {
+        $this->authorizeTeacherSession($request, $classSession);
         $validated = $request->validate([
             'attendance' => ['required', 'array'],
             'attendance.*.status' => ['required', 'in:present,absent,late,sick,excused'],
@@ -238,6 +242,8 @@ class ProcessController extends Controller
 
     public function destroySession(ClassSession $classSession): RedirectResponse
     {
+        $this->authorizeTeacherSession(request(), $classSession);
+
         if ($classSession->observations()->exists()) {
             return back()->withErrors('Presensi tidak bisa dihapus karena sudah memiliki observasi.');
         }
@@ -251,6 +257,7 @@ class ProcessController extends Controller
 
     public function storeObservation(Request $request): RedirectResponse
     {
+        $scope = app(AccessScopeService::class);
         $validated = $request->validate([
             'class_session_id' => ['required', 'exists:class_sessions,id'],
             'student_id' => ['required', 'exists:students,id'],
@@ -260,6 +267,18 @@ class ProcessController extends Controller
             'observations' => ['required', 'array', 'min:1'],
             'observations.*.status' => ['required', 'in:achieved,emerging,needs_support'],
         ]);
+        $teacher = $request->user() ? $scope->teacherFor($request->user()) : null;
+
+        if ($teacher && (int) $validated['teacher_id'] !== $teacher->id) {
+            throw ValidationException::withMessages([
+                'teacher_id' => 'Guru hanya boleh menyimpan observasi atas nama dirinya sendiri.',
+            ]);
+        }
+
+        abort_if(! in_array((int) $validated['student_id'], $scope->accessibleStudentIds($request->user()), true), 403);
+
+        $classSession = ClassSession::query()->findOrFail($validated['class_session_id']);
+        $this->authorizeTeacherSession($request, $classSession);
 
         $indicatorIds = collect(array_keys($validated['observations']))
             ->map(fn ($id) => (int) $id)
@@ -322,12 +341,15 @@ class ProcessController extends Controller
             }
         }
 
-        return redirect(route('alpha.process.observations') . '#monitoring-harian')
+        return redirect(route('alpha.process.observations').'#monitoring-harian')
             ->with('status', "{$createdCount} observasi tersimpan. Status SD otomatis masuk draft ILP.");
     }
 
     public function updateIlp(Request $request, IlpPlan $ilpPlan): RedirectResponse
     {
+        $scope = app(AccessScopeService::class);
+        abort_if(! in_array((int) $ilpPlan->student_id, $scope->accessibleStudentIds($request->user()), true), 403);
+
         $validated = $request->validate([
             'status' => ['required', 'in:draft,in_progress,completed,cancelled'],
             'analysis' => ['nullable', 'string', 'max:3000'],
@@ -339,7 +361,7 @@ class ProcessController extends Controller
 
         $ilpPlan->update($validated);
 
-        return redirect(route('alpha.process.ilp') . "#ilp-plan-{$ilpPlan->id}")
+        return redirect(route('alpha.process.ilp')."#ilp-plan-{$ilpPlan->id}")
             ->with('status', 'Rencana ILP berhasil diperbarui.');
     }
 
@@ -367,10 +389,17 @@ class ProcessController extends Controller
 
     private function processView(Request $request, string $processSection, string $activeMenu): View
     {
+        $scope = app(AccessScopeService::class);
+        $user = $request->user();
+        $studentIds = $user ? $scope->accessibleStudentIds($user) : [];
+        $classIds = $user ? $scope->accessibleClassIds($user) : [];
+        $teacher = $user ? $scope->teacherFor($user) : null;
         $selectedSessionDate = $request->date('date')?->toDateString() ?? now()->toDateString();
         $sessions = ClassSession::query()
             ->with(['weeklySchedule', 'schoolClass.classLevel', 'teacher', 'students.guardian', 'students.schoolClass', 'attendances.student'])
             ->withCount('observations')
+            ->whereIn('school_class_id', $classIds)
+            ->when($teacher, fn ($query) => $query->where('teacher_id', $teacher->id))
             ->orderByDesc('session_date')
             ->orderBy('starts_at')
             ->limit(80)
@@ -412,6 +441,8 @@ class ProcessController extends Controller
             'processSection' => $processSection,
             'schedules' => WeeklySchedule::query()
                 ->with(['schoolClass.classLevel', 'teacher', 'students.guardian', 'students.schoolClass'])
+                ->whereIn('school_class_id', $classIds)
+                ->when($teacher, fn ($query) => $query->where('teacher_id', $teacher->id))
                 ->orderBy('day_of_week')
                 ->orderBy('starts_at')
                 ->get(),
@@ -419,20 +450,41 @@ class ProcessController extends Controller
             'selectedSessionDate' => $selectedSessionDate,
             'observations' => Observation::query()
                 ->with(['student.schoolClass', 'indicator.developmentArea', 'teacher', 'classSession'])
+                ->whereIn('student_id', $studentIds)
                 ->orderByDesc('observed_on')
                 ->orderByDesc('id')
                 ->get(),
             'ilpPlans' => IlpPlan::query()
                 ->with(['student.schoolClass.classLevel', 'indicator.developmentArea', 'term', 'triggerObservation.teacher'])
+                ->whereIn('student_id', $studentIds)
                 ->orderByRaw("case status when 'draft' then 1 when 'in_progress' then 2 when 'completed' then 3 else 4 end")
                 ->latest('updated_at')
                 ->get(),
-            'classes' => SchoolClass::naturalSort(SchoolClass::query()->with('classLevel')->get()),
-            'students' => Student::query()->with(['schoolClass.classLevel', 'guardian'])->orderBy('name')->get(),
-            'teachers' => Teacher::query()->orderBy('name')->get(),
+            'classes' => SchoolClass::naturalSort(SchoolClass::query()->with('classLevel')->whereIn('id', $classIds)->get()),
+            'students' => Student::query()->with(['schoolClass.classLevel', 'guardian'])->whereIn('id', $studentIds)->orderBy('name')->get(),
+            'teachers' => Teacher::query()
+                ->when($teacher, fn ($query) => $query->whereKey($teacher->id))
+                ->orderBy('name')
+                ->get(),
             'indicators' => $indicators,
             'monitoringSnapshots' => $monitoringSnapshots,
+            'canManageSchedules' => in_array($user?->role, ['super_admin', 'admin'], true),
+            'canWriteProcess' => in_array($user?->role, ['super_admin', 'admin', 'teacher'], true),
         ]);
+    }
+
+    private function authorizeTeacherSchedule(Request $request, WeeklySchedule $schedule): void
+    {
+        $teacher = app(AccessScopeService::class)->teacherFor($request->user());
+
+        abort_if($teacher && (int) $schedule->teacher_id !== $teacher->id, 403);
+    }
+
+    private function authorizeTeacherSession(Request $request, ClassSession $classSession): void
+    {
+        $teacher = app(AccessScopeService::class)->teacherFor($request->user());
+
+        abort_if($teacher && (int) $classSession->teacher_id !== $teacher->id, 403);
     }
 
     private function scheduleRules(Request $request): array

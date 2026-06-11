@@ -11,8 +11,13 @@
             <div class="meta">Data dibuat dari migration dan seeder Laravel. Rapor masih draft otomatis, bukan final.</div>
         </div>
         <div class="toolbar">
-            <a class="btn ghost" href="{{ route('alpha.master', ['role' => $activeRole]) }}">Buka Master</a>
-            <a class="btn teal" href="{{ route('alpha.process', ['role' => $activeRole]) }}">Input Proses</a>
+            @if (in_array($activeRole, ['super_admin', 'admin'], true))
+                <a class="btn ghost" href="{{ route('alpha.master') }}">Buka Master</a>
+            @endif
+            @if (in_array($activeRole, ['super_admin', 'admin', 'teacher', 'principal'], true))
+                <a class="btn teal" href="{{ route('alpha.process') }}">{{ $activeRole === 'principal' ? 'Lihat Proses' : 'Input Proses' }}</a>
+            @endif
+            <a class="btn ghost" href="{{ route('alpha.reports') }}">Lihat Rapor</a>
         </div>
     </div>
 
