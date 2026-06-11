@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Alpha;
 use App\Http\Controllers\Alpha\Concerns\ProvidesAlphaShell;
 use App\Http\Controllers\Controller;
 use App\Models\ClassSession;
+use App\Models\DevelopmentArea;
 use App\Models\IlpPlan;
 use App\Models\Indicator;
 use App\Models\Observation;
@@ -119,11 +120,11 @@ class ProcessController extends Controller
         $sessionDate = Carbon::parse($validated['session_date']);
 
         if (! $schedule->is_active) {
-            return back()->withErrors('Jadwal nonaktif tidak bisa dibuat menjadi presensi.');
+            return back()->withErrors('Jadwal nonaktif tidak bisa dibuat menjadi sesi belajar.');
         }
 
         if ((int) $sessionDate->dayOfWeekIso !== $schedule->day_of_week) {
-            return back()->withErrors("Tanggal presensi harus sesuai hari jadwal, yaitu {$this->dayLabels()[$schedule->day_of_week]}.");
+            return back()->withErrors("Tanggal sesi belajar harus sesuai hari jadwal, yaitu {$this->dayLabels()[$schedule->day_of_week]}.");
         }
 
         $sessionPayload = [
@@ -164,11 +165,13 @@ class ProcessController extends Controller
                     'student_id' => $studentId,
                 ], [
                     'status' => 'present',
+                    'marked_by' => null,
+                    'marked_at' => null,
                 ]);
             }
         }
 
-        return back()->with('status', 'Presensi berhasil dibuat dari jadwal mingguan.');
+        return back()->with('status', 'Sesi belajar berhasil dibuat dari jadwal mingguan. Presensi bisa diisi kapan saja.');
     }
 
     public function updateSession(Request $request, ClassSession $classSession): RedirectResponse
@@ -200,10 +203,12 @@ class ProcessController extends Controller
                 'student_id' => $studentId,
             ], [
                 'status' => 'present',
+                'marked_by' => null,
+                'marked_at' => null,
             ]);
         }
 
-        return back()->with('status', 'Presensi kelas berhasil diperbarui.');
+        return back()->with('status', 'Sesi belajar berhasil diperbarui.');
     }
 
     public function updateSessionAttendance(Request $request, ClassSession $classSession): RedirectResponse
@@ -211,11 +216,13 @@ class ProcessController extends Controller
         $this->authorizeTeacherSession($request, $classSession);
         $validated = $request->validate([
             'attendance' => ['required', 'array'],
-            'attendance.*.status' => ['required', 'in:present,absent,late,sick,excused'],
-            'attendance.*.note' => ['nullable', 'string', 'max:1000'],
+            'attendance.*.status' => ['required', 'in:present,excused,sick,absent,late,unmarked'],
+            'attendance.*.note' => ['nullable', 'string', 'max:500'],
+            'attendance_action' => ['nullable', 'in:save,all_present,reset'],
         ]);
 
         $sessionStudentIds = $classSession->students()->pluck('students.id')->map(fn ($id) => (int) $id)->all();
+        $action = $validated['attendance_action'] ?? 'save';
 
         foreach (array_keys($validated['attendance']) as $studentId) {
             if (! in_array((int) $studentId, $sessionStudentIds, true)) {
@@ -225,17 +232,35 @@ class ProcessController extends Controller
             }
         }
 
-        foreach ($validated['attendance'] as $studentId => $row) {
+        $rows = collect($sessionStudentIds)->mapWithKeys(function (int $studentId) use ($validated, $action): array {
+            $row = $validated['attendance'][$studentId] ?? [];
+
+            if ($action === 'all_present') {
+                $row['status'] = 'present';
+            }
+
+            if ($action === 'reset') {
+                $row['status'] = 'unmarked';
+                $row['note'] = null;
+            }
+
+            return [$studentId => $row];
+        });
+
+        foreach ($rows as $studentId => $row) {
+            $status = $row['status'] ?? 'unmarked';
+            $isMarked = $status !== 'unmarked';
+
             $classSession->attendances()->updateOrCreate(
                 ['student_id' => (int) $studentId],
                 [
-                    'status' => $row['status'],
+                    'status' => $isMarked ? $status : 'present',
                     'note' => $row['note'] ?? null,
+                    'marked_by' => $isMarked ? $request->user()?->id : null,
+                    'marked_at' => $isMarked ? now() : null,
                 ]
             );
         }
-
-        $classSession->update(['status' => 'completed']);
 
         return back()->with('status', 'Presensi berhasil diperbarui.');
     }
@@ -245,104 +270,167 @@ class ProcessController extends Controller
         $this->authorizeTeacherSession(request(), $classSession);
 
         if ($classSession->observations()->exists()) {
-            return back()->withErrors('Presensi tidak bisa dihapus karena sudah memiliki observasi.');
+            return back()->withErrors('Sesi belajar tidak bisa dihapus karena sudah memiliki observasi.');
         }
 
         $classSession->attendances()->delete();
         $classSession->students()->detach();
         $classSession->delete();
 
-        return back()->with('status', 'Presensi kelas berhasil dihapus.');
+        return back()->with('status', 'Sesi belajar berhasil dihapus.');
+    }
+
+    public function updateSessionNote(Request $request, ClassSession $classSession): RedirectResponse
+    {
+        $this->authorizeTeacherSession($request, $classSession);
+
+        $validated = $request->validate([
+            'class_note' => ['nullable', 'string', 'max:3000'],
+            'follow_up_recommendation' => ['nullable', 'string', 'max:3000'],
+        ]);
+
+        $classSession->update($validated);
+
+        return back()->with('status', 'Catatan kelas berhasil disimpan.');
+    }
+
+    public function closeSession(Request $request, ClassSession $classSession): RedirectResponse
+    {
+        $this->authorizeTeacherSession($request, $classSession);
+
+        $validated = $request->validate([
+            'class_note' => ['nullable', 'string', 'max:3000'],
+            'follow_up_recommendation' => ['nullable', 'string', 'max:3000'],
+        ]);
+
+        $classSession->loadMissing(['students', 'attendances', 'observations']);
+        $recap = $classSession->attendanceRecap();
+
+        $classSession->update([
+            ...$validated,
+            'status' => 'completed',
+            'closed_by' => $request->user()?->id,
+            'closed_at' => now(),
+        ]);
+
+        $warning = $recap['unmarked'] > 0
+            ? " Sesi ditutup dengan {$recap['unmarked']} siswa belum ditandai presensinya."
+            : '';
+
+        return back()->with('status', 'Sesi belajar berhasil ditutup.'.$warning);
     }
 
     public function storeObservation(Request $request): RedirectResponse
     {
         $scope = app(AccessScopeService::class);
-        $validated = $request->validate([
-            'class_session_id' => ['required', 'exists:class_sessions,id'],
-            'student_id' => ['required', 'exists:students,id'],
-            'teacher_id' => ['required', 'exists:teachers,id'],
-            'observed_on' => ['required', 'date'],
-            'note' => ['nullable', 'string', 'max:2000'],
-            'observations' => ['required', 'array', 'min:1'],
-            'observations.*.status' => ['required', 'in:achieved,emerging,needs_support'],
-        ]);
         $teacher = $request->user() ? $scope->teacherFor($request->user()) : null;
 
-        if ($teacher && (int) $validated['teacher_id'] !== $teacher->id) {
-            throw ValidationException::withMessages([
-                'teacher_id' => 'Guru hanya boleh menyimpan observasi atas nama dirinya sendiri.',
+        if ($request->has('observations')) {
+            $validated = $request->validate([
+                'class_session_id' => ['required', 'exists:class_sessions,id'],
+                'student_id' => ['required', 'exists:students,id'],
+                'teacher_id' => ['required', 'exists:teachers,id'],
+                'observed_on' => ['required', 'date'],
+                'note' => ['nullable', 'string', 'max:2000'],
+                'observations' => ['required', 'array', 'min:1'],
+                'observations.*.status' => ['required', 'in:achieved,emerging,needs_support,developing,independent,exceeding'],
             ]);
+
+            $this->assertObservationTeacher($teacher, (int) $validated['teacher_id']);
+            abort_if(! in_array((int) $validated['student_id'], $scope->accessibleStudentIds($request->user()), true), 403);
+
+            $classSession = ClassSession::query()->findOrFail($validated['class_session_id']);
+            $this->authorizeTeacherSession($request, $classSession);
+            $this->assertSessionStudent($classSession, (int) $validated['student_id']);
+
+            $createdCount = 0;
+            foreach ($validated['observations'] as $indicatorId => $row) {
+                $indicator = Indicator::query()->findOrFail((int) $indicatorId);
+                $level = $this->normalizeObservationLevel($row['status']);
+                $needsFollowUp = $level === 'emerging' || $row['status'] === 'needs_support';
+
+                $observation = Observation::query()->create([
+                    'class_session_id' => $classSession->id,
+                    'student_id' => $validated['student_id'],
+                    'indicator_id' => $indicator->id,
+                    'development_area_id' => $indicator->development_area_id,
+                    'teacher_id' => $validated['teacher_id'],
+                    'observation_type' => 'scheduled',
+                    'observed_on' => Carbon::parse($validated['observed_on'])->toDateString(),
+                    'level' => $level,
+                    'status' => 'included_in_report',
+                    'score' => Observation::scoreForLevel($level),
+                    'note' => $validated['note'] ?? null,
+                    'needs_follow_up' => $needsFollowUp,
+                    'include_in_report' => true,
+                ]);
+                $createdCount++;
+
+                if ($observation->needs_follow_up) {
+                    $this->createIlpFromObservation($observation);
+                }
+            }
+
+            return redirect(route('alpha.process.observations').'#monitoring-harian')
+                ->with('status', "{$createdCount} observasi tersimpan sebagai bahan perkembangan siswa.");
         }
 
+        $validated = $request->validate([
+            'class_session_id' => ['nullable', 'exists:class_sessions,id'],
+            'student_id' => ['required', 'exists:students,id'],
+            'teacher_id' => ['required', 'exists:teachers,id'],
+            'development_area_id' => ['required', 'exists:development_areas,id'],
+            'indicator_id' => ['nullable', 'exists:indicators,id'],
+            'observed_on' => ['required', 'date'],
+            'level' => ['required', 'in:emerging,developing,independent,exceeding'],
+            'note' => ['required', 'string', 'max:2000'],
+            'needs_follow_up' => ['nullable', 'boolean'],
+            'include_in_report' => ['nullable', 'boolean'],
+        ]);
+
+        $this->assertObservationTeacher($teacher, (int) $validated['teacher_id']);
         abort_if(! in_array((int) $validated['student_id'], $scope->accessibleStudentIds($request->user()), true), 403);
 
-        $classSession = ClassSession::query()->findOrFail($validated['class_session_id']);
-        $this->authorizeTeacherSession($request, $classSession);
+        $classSession = null;
+        if ($validated['class_session_id'] ?? null) {
+            $classSession = ClassSession::query()->findOrFail($validated['class_session_id']);
+            $this->authorizeTeacherSession($request, $classSession);
+            $this->assertSessionStudent($classSession, (int) $validated['student_id']);
+        }
 
-        $indicatorIds = collect(array_keys($validated['observations']))
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values();
+        $indicator = isset($validated['indicator_id'])
+            ? Indicator::query()->findOrFail($validated['indicator_id'])
+            : null;
 
-        $validIndicatorIds = Indicator::query()
-            ->whereIn('id', $indicatorIds)
-            ->pluck('id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
-
-        if ($indicatorIds->diff($validIndicatorIds)->isNotEmpty()) {
+        if ($indicator && (int) $indicator->development_area_id !== (int) $validated['development_area_id']) {
             throw ValidationException::withMessages([
-                'observations' => 'Ada indikator observasi yang tidak valid.',
+                'indicator_id' => 'Indikator yang dipilih tidak sesuai dengan area perkembangan.',
             ]);
         }
 
-        $sessionStudentExists = ClassSession::query()
-            ->whereKey($validated['class_session_id'])
-            ->whereHas('students', fn ($query) => $query->whereKey($validated['student_id']))
-            ->exists();
+        $includeInReport = $request->boolean('include_in_report');
+        $observation = Observation::query()->create([
+            'class_session_id' => $classSession?->id,
+            'student_id' => $validated['student_id'],
+            'indicator_id' => $indicator?->id,
+            'development_area_id' => $validated['development_area_id'],
+            'teacher_id' => $validated['teacher_id'],
+            'observation_type' => $classSession ? 'scheduled' : 'spontaneous',
+            'observed_on' => Carbon::parse($validated['observed_on'])->toDateString(),
+            'level' => $validated['level'],
+            'status' => $includeInReport ? 'included_in_report' : 'saved',
+            'score' => Observation::scoreForLevel($validated['level']),
+            'note' => $validated['note'],
+            'needs_follow_up' => $request->boolean('needs_follow_up'),
+            'include_in_report' => $includeInReport,
+        ]);
 
-        if (! $sessionStudentExists) {
-            throw ValidationException::withMessages([
-                'student_id' => 'Siswa harus terdaftar pada presensi yang dipilih.',
-            ]);
-        }
-
-        $observedOn = Carbon::parse($validated['observed_on'])->toDateString();
-        $createdCount = 0;
-        foreach ($validated['observations'] as $indicatorId => $row) {
-            $status = $row['status'];
-            $observation = Observation::query()
-                ->where('class_session_id', $validated['class_session_id'])
-                ->where('student_id', $validated['student_id'])
-                ->where('indicator_id', (int) $indicatorId)
-                ->whereDate('observed_on', $observedOn)
-                ->first();
-
-            if (! $observation) {
-                $observation = new Observation([
-                    'class_session_id' => $validated['class_session_id'],
-                    'student_id' => $validated['student_id'],
-                    'indicator_id' => (int) $indicatorId,
-                    'observed_on' => $observedOn,
-                ]);
-            }
-
-            $observation->fill([
-                'teacher_id' => $validated['teacher_id'],
-                'status' => $status,
-                'score' => Observation::STATUS_SCORES[$status],
-                'note' => $validated['note'] ?? null,
-            ])->save();
-            $createdCount++;
-
-            if ($observation->status === 'needs_support') {
-                $this->createIlpFromObservation($observation);
-            }
+        if ($observation->needs_follow_up) {
+            $this->createIlpFromObservation($observation);
         }
 
         return redirect(route('alpha.process.observations').'#monitoring-harian')
-            ->with('status', "{$createdCount} observasi tersimpan. Status SD otomatis masuk draft ILP.");
+            ->with('status', 'Observasi cepat berhasil disimpan.');
     }
 
     public function updateIlp(Request $request, IlpPlan $ilpPlan): RedirectResponse
@@ -367,6 +455,10 @@ class ProcessController extends Controller
 
     private function createIlpFromObservation(Observation $observation): void
     {
+        if (! $observation->indicator_id) {
+            return;
+        }
+
         $term = Term::query()->where('is_current', true)->first();
 
         IlpPlan::query()->firstOrCreate(
@@ -385,6 +477,37 @@ class ProcessController extends Controller
                 'ends_on' => Carbon::parse($observation->observed_on)->addWeeks(4),
             ]
         );
+    }
+
+    private function assertObservationTeacher(?Teacher $teacher, int $submittedTeacherId): void
+    {
+        if ($teacher && $submittedTeacherId !== $teacher->id) {
+            throw ValidationException::withMessages([
+                'teacher_id' => 'Guru hanya boleh menyimpan observasi atas nama dirinya sendiri.',
+            ]);
+        }
+    }
+
+    private function assertSessionStudent(ClassSession $classSession, int $studentId): void
+    {
+        $sessionStudentExists = $classSession
+            ->students()
+            ->whereKey($studentId)
+            ->exists();
+
+        if (! $sessionStudentExists) {
+            throw ValidationException::withMessages([
+                'student_id' => 'Siswa harus terdaftar pada sesi belajar yang dipilih.',
+            ]);
+        }
+    }
+
+    private function normalizeObservationLevel(string $value): string
+    {
+        return [
+            'achieved' => 'independent',
+            'needs_support' => 'emerging',
+        ][$value] ?? $value;
     }
 
     private function processView(Request $request, string $processSection, string $activeMenu): View
@@ -428,7 +551,7 @@ class ProcessController extends Controller
                 'items' => $rows
                     ->mapWithKeys(fn (Observation $observation) => [
                         (string) $observation->indicator_id => [
-                            'status' => $observation->status,
+                            'status' => $observation->level,
                             'note' => $observation->note,
                         ],
                     ])
@@ -449,8 +572,9 @@ class ProcessController extends Controller
             'sessions' => $sessions,
             'selectedSessionDate' => $selectedSessionDate,
             'observations' => Observation::query()
-                ->with(['student.schoolClass', 'indicator.developmentArea', 'teacher', 'classSession'])
+                ->with(['student.schoolClass', 'developmentArea', 'indicator.developmentArea', 'teacher', 'classSession'])
                 ->whereIn('student_id', $studentIds)
+                ->where('status', '!=', 'archived')
                 ->orderByDesc('observed_on')
                 ->orderByDesc('id')
                 ->get(),
@@ -466,6 +590,7 @@ class ProcessController extends Controller
                 ->when($teacher, fn ($query) => $query->whereKey($teacher->id))
                 ->orderBy('name')
                 ->get(),
+            'developmentAreas' => DevelopmentArea::query()->orderBy('sort_order')->orderBy('name')->get(),
             'indicators' => $indicators,
             'monitoringSnapshots' => $monitoringSnapshots,
             'canManageSchedules' => in_array($user?->role, ['super_admin', 'admin'], true),

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Attendance;
 use App\Models\ClassSession;
+use App\Models\DevelopmentArea;
 use App\Models\IlpPlan;
 use App\Models\Indicator;
 use App\Models\Observation;
@@ -145,7 +146,7 @@ class ExampleTest extends TestCase
 
         $mira = Teacher::query()->where('code', 'TCH02')->firstOrFail();
 
-        $this->get('/reports?teacher_id=' . $mira->id)
+        $this->get('/reports?teacher_id='.$mira->id)
             ->assertStatus(200)
             ->assertSee('Kirana Satya')
             ->assertSee('Arka Wijaya')
@@ -215,7 +216,7 @@ class ExampleTest extends TestCase
             ->assertSessionHasErrors('starts_at');
     }
 
-    public function test_daily_monitoring_stores_multiple_observations_and_creates_ilp_for_sd(): void
+    public function test_daily_monitoring_stores_multiple_observations_and_creates_ilp_follow_up(): void
     {
         $this->seed();
         $this->signIn();
@@ -234,8 +235,8 @@ class ExampleTest extends TestCase
             'observed_on' => '2026-06-10',
             'note' => 'Monitoring harian dari form baru.',
             'observations' => [
-                $indicators['PMK01']->id => ['status' => 'achieved'],
-                $indicators['PMK02']->id => ['status' => 'needs_support'],
+                $indicators['PMK01']->id => ['status' => 'independent'],
+                $indicators['PMK02']->id => ['status' => 'emerging'],
             ],
         ])->assertRedirect('/process/observations#monitoring-harian')
             ->assertSessionDoesntHaveErrors();
@@ -243,7 +244,8 @@ class ExampleTest extends TestCase
         $this->assertTrue(Observation::query()
             ->where('student_id', $student->id)
             ->where('indicator_id', $indicators['PMK01']->id)
-            ->where('status', 'achieved')
+            ->where('level', 'independent')
+            ->where('status', 'included_in_report')
             ->exists());
 
         $this->assertTrue(IlpPlan::query()
@@ -257,12 +259,12 @@ class ExampleTest extends TestCase
             'teacher_id' => $teacher->id,
             'observed_on' => '2026-06-10',
             'observations' => [
-                $indicators['PMK01']->id => ['status' => 'emerging'],
+                $indicators['PMK01']->id => ['status' => 'developing'],
             ],
         ])->assertRedirect('/process/observations#monitoring-harian')
             ->assertSessionDoesntHaveErrors();
 
-        $this->assertSame(1, Observation::query()
+        $this->assertSame(2, Observation::query()
             ->where('class_session_id', $session->id)
             ->where('student_id', $student->id)
             ->whereDate('observed_on', '2026-06-10')
@@ -274,8 +276,82 @@ class ExampleTest extends TestCase
             ->where('student_id', $student->id)
             ->where('indicator_id', $indicators['PMK01']->id)
             ->whereDate('observed_on', '2026-06-10')
-            ->where('status', 'emerging')
+            ->where('level', 'developing')
             ->exists());
+    }
+
+    public function test_attendance_can_be_marked_all_present_and_reset_to_unmarked(): void
+    {
+        $this->seed();
+        $this->signIn();
+
+        $schedule = WeeklySchedule::query()->with('students')->where('day_of_week', 1)->firstOrFail();
+
+        $this->from('/process/attendance')->post(route('alpha.sessions.create-from-schedule'), [
+            'weekly_schedule_id' => $schedule->id,
+            'session_date' => '2026-06-08',
+        ])->assertRedirect('/process/attendance')
+            ->assertSessionDoesntHaveErrors();
+
+        $session = ClassSession::query()
+            ->where('weekly_schedule_id', $schedule->id)
+            ->whereDate('session_date', '2026-06-08')
+            ->firstOrFail();
+
+        $this->assertSame($session->students()->count(), $session->attendances()->whereNull('marked_at')->count());
+
+        $payload = $session->students()
+            ->pluck('students.id')
+            ->mapWithKeys(fn ($studentId) => [$studentId => ['status' => 'unmarked', 'note' => null]])
+            ->all();
+
+        $this->patch(route('alpha.process.sessions.attendance', $session), [
+            'attendance_action' => 'all_present',
+            'attendance' => $payload,
+        ])->assertRedirect()
+            ->assertSessionDoesntHaveErrors();
+
+        $this->assertSame($session->students()->count(), $session->attendances()->where('status', 'present')->whereNotNull('marked_at')->count());
+
+        $this->patch(route('alpha.process.sessions.attendance', $session), [
+            'attendance_action' => 'reset',
+            'attendance' => $payload,
+        ])->assertRedirect()
+            ->assertSessionDoesntHaveErrors();
+
+        $this->assertSame($session->students()->count(), $session->attendances()->whereNull('marked_at')->count());
+    }
+
+    public function test_teacher_can_store_spontaneous_observation_without_session(): void
+    {
+        $this->seed();
+        $teacherUser = $this->signIn('raras@montessori.test');
+
+        $teacher = Teacher::query()->where('user_id', $teacherUser->id)->firstOrFail();
+        $student = Student::query()->where('code', 'SUN01')->firstOrFail();
+        $area = DevelopmentArea::query()->where('slug', 'sosial-emosional')->firstOrFail();
+
+        $this->from('/process/observations')->post(route('alpha.observations.store'), [
+            'student_id' => $student->id,
+            'teacher_id' => $teacher->id,
+            'development_area_id' => $area->id,
+            'observed_on' => '2026-06-11',
+            'level' => 'developing',
+            'note' => 'Alya mulai mengajak teman bergantian memakai material saat kegiatan bebas.',
+            'include_in_report' => '1',
+        ])->assertRedirect('/process/observations#monitoring-harian')
+            ->assertSessionDoesntHaveErrors();
+
+        $this->assertDatabaseHas('observations', [
+            'class_session_id' => null,
+            'student_id' => $student->id,
+            'teacher_id' => $teacher->id,
+            'development_area_id' => $area->id,
+            'indicator_id' => null,
+            'observation_type' => 'spontaneous',
+            'level' => 'developing',
+            'status' => 'included_in_report',
+        ]);
     }
 
     public function test_ilp_plan_can_be_updated_from_process_page(): void

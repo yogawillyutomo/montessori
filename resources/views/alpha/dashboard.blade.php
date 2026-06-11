@@ -147,8 +147,8 @@
                         <td>{{ $observation->observed_on->format('d M Y') }}</td>
                         <td><strong>{{ $observation->student->name }}</strong></td>
                         <td>{{ $observation->student->schoolClass->name }}</td>
-                        <td>{{ $observation->indicator->developmentArea->name }}</td>
-                        <td>{{ $observation->indicator->description }}</td>
+                        <td>{{ $observation->developmentArea?->name ?? $observation->indicator?->developmentArea?->name ?? '-' }}</td>
+                        <td>{{ $observation->indicator?->description ?? 'Catatan spontan tanpa indikator spesifik' }}</td>
                         <td>{{ $observation->teacher->name }}</td>
                     </tr>
                 @empty

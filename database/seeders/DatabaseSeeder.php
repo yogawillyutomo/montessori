@@ -432,6 +432,8 @@ class DatabaseSeeder extends Seeder
                     'student_id' => $studentId,
                 ], [
                     'status' => 'present',
+                    'marked_by' => $schedule->teacher?->user_id ?? $users['admin']->id,
+                    'marked_at' => now(),
                 ]);
             }
 
@@ -439,34 +441,40 @@ class DatabaseSeeder extends Seeder
         }
 
         $observationRows = [
-            ['sunny_monday', 'alya', 'LKH01', 'raras', 'achieved', 'Merapikan tray setelah diberi pengingat satu kali.'],
-            ['sunny_monday', 'raka', 'BHS01', 'raras', 'emerging', 'Mengikuti instruksi pertama, instruksi kedua masih perlu diulang.'],
-            ['glow_tuesday', 'kirana', 'KOG01', 'mira', 'achieved', 'Mandiri mengelompokkan warna primer dan sekunder.'],
-            ['sunny_wednesday', 'nala', 'PMK01', 'dimas', 'needs_support', 'Masih ragu naik turun tangga kecil, perlu pendampingan dekat.'],
-            ['glow_thursday', 'maya', 'SEM01', 'raras', 'emerging', 'Mulai menunggu giliran saat permainan kelompok.'],
-            ['infant_friday', 'rumi', 'SEN01', 'hana', 'achieved', 'Merespons material visual dengan fokus stabil.'],
-            ['sunny_wednesday', 'alya', 'PMK02', 'dimas', 'emerging', 'Melompat dengan antusias, pendaratan masih perlu diarahkan.'],
-            ['sunny_wednesday', 'nala', 'SEM02', 'dimas', 'needs_support', 'Membutuhkan bantuan guru untuk kembali tenang setelah transisi.'],
+            ['sunny_monday', 'alya', 'LKH01', 'raras', 'independent', false, 'Merapikan tray setelah diberi pengingat satu kali.'],
+            ['sunny_monday', 'raka', 'BHS01', 'raras', 'developing', false, 'Mengikuti instruksi pertama, instruksi kedua masih perlu diulang.'],
+            ['glow_tuesday', 'kirana', 'KOG01', 'mira', 'independent', false, 'Mandiri mengelompokkan warna primer dan sekunder.'],
+            ['sunny_wednesday', 'nala', 'PMK01', 'dimas', 'emerging', true, 'Masih ragu naik turun tangga kecil, perlu pendampingan dekat.'],
+            ['glow_thursday', 'maya', 'SEM01', 'raras', 'developing', false, 'Mulai menunggu giliran saat permainan kelompok.'],
+            ['infant_friday', 'rumi', 'SEN01', 'hana', 'independent', false, 'Merespons material visual dengan fokus stabil.'],
+            ['sunny_wednesday', 'alya', 'PMK02', 'dimas', 'developing', false, 'Melompat dengan antusias, pendaratan masih perlu diarahkan.'],
+            ['sunny_wednesday', 'nala', 'SEM02', 'dimas', 'emerging', true, 'Membutuhkan bantuan guru untuk kembali tenang setelah transisi.'],
         ];
 
         $createdObservations = [];
-        foreach ($observationRows as [$sessionKey, $studentKey, $indicatorCode, $teacherKey, $status, $note]) {
+        foreach ($observationRows as [$sessionKey, $studentKey, $indicatorCode, $teacherKey, $level, $needsFollowUp, $note]) {
+            $indicator = $indicators[$indicatorCode];
             $observation = Observation::query()->updateOrCreate([
                 'class_session_id' => $sessions[$sessionKey]->id,
                 'student_id' => $students[$studentKey]->id,
-                'indicator_id' => $indicators[$indicatorCode]->id,
+                'indicator_id' => $indicator->id,
                 'observed_on' => $sessions[$sessionKey]->session_date,
             ], [
                 'teacher_id' => $teachers[$teacherKey]->id,
-                'status' => $status,
-                'score' => Observation::STATUS_SCORES[$status],
+                'development_area_id' => $indicator->development_area_id,
+                'observation_type' => 'scheduled',
+                'level' => $level,
+                'status' => 'included_in_report',
+                'score' => Observation::scoreForLevel($level),
                 'note' => $note,
+                'needs_follow_up' => $needsFollowUp,
+                'include_in_report' => true,
             ]);
 
             $createdObservations[] = $observation;
         }
 
-        foreach (collect($createdObservations)->where('status', 'needs_support') as $observation) {
+        foreach (collect($createdObservations)->where('needs_follow_up', true) as $observation) {
             IlpPlan::query()->updateOrCreate([
                 'student_id' => $observation->student_id,
                 'indicator_id' => $observation->indicator_id,
@@ -523,7 +531,7 @@ class DatabaseSeeder extends Seeder
                     'name' => $area->name,
                     'score' => $score,
                     'observed' => $observations->count(),
-                    'needs_support' => $observations->where('status', 'needs_support')->count(),
+                    'needs_support' => $observations->where('needs_follow_up', true)->count(),
                 ];
             })
             ->values()
@@ -532,7 +540,7 @@ class DatabaseSeeder extends Seeder
         return [
             'areas' => $areas,
             'observation_count' => $student->observations()->count(),
-            'needs_support_count' => $student->observations()->where('status', 'needs_support')->count(),
+            'needs_support_count' => $student->observations()->where('needs_follow_up', true)->count(),
             'generated_from' => 'observations',
         ];
     }

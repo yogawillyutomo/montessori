@@ -146,7 +146,7 @@
     <section class="student-report-panel">
         <div class="report-section-title">
             <h3>Capaian Perkembangan Detail</h3>
-            <span class="meta">SD, SB, dan SM mengikuti format rapor Excel referensi.</span>
+            <span class="meta">MB, B, M, dan MH mengikuti level perkembangan Montessori Bloom.</span>
         </div>
         <div class="report-rubric detail-rubric">
             @forelse ($rubric as $row)

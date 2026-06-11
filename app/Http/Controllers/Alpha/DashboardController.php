@@ -32,7 +32,7 @@ class DashboardController extends Controller
                 'students' => count($studentIds),
                 'weekly_schedules' => WeeklySchedule::query()->whereIn('school_class_id', $classIds)->where('is_active', true)->count(),
                 'draft_reports' => Report::query()->whereIn('student_id', $studentIds)->where('status', 'draft')->count(),
-                'needs_support' => Observation::query()->whereIn('student_id', $studentIds)->where('status', 'needs_support')->count(),
+                'needs_support' => Observation::query()->whereIn('student_id', $studentIds)->where('needs_follow_up', true)->count(),
             ],
             'classes' => SchoolClass::query()
                 ->with('classLevel')
@@ -50,9 +50,9 @@ class DashboardController extends Controller
                 ->get(),
             'areaScores' => $this->areaScores($studentIds),
             'needsSupport' => Observation::query()
-                ->with(['student.schoolClass', 'indicator.developmentArea', 'teacher'])
+                ->with(['student.schoolClass', 'developmentArea', 'indicator.developmentArea', 'teacher'])
                 ->whereIn('student_id', $studentIds)
-                ->where('status', 'needs_support')
+                ->where('needs_follow_up', true)
                 ->latest('observed_on')
                 ->limit(5)
                 ->get(),
@@ -65,7 +65,7 @@ class DashboardController extends Controller
     private function areaScores(array $studentIds): array
     {
         return DevelopmentArea::query()
-            ->with(['indicators.observations' => fn ($query) => $query->whereIn('student_id', $studentIds)])
+            ->with(['indicators.observations' => fn ($query) => $query->whereIn('student_id', $studentIds)->where('status', '!=', 'archived')])
             ->orderBy('sort_order')
             ->get()
             ->map(function (DevelopmentArea $area): array {

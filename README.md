@@ -10,8 +10,10 @@ Project ini masih fase alpha, tetapi struktur utamanya sudah disiapkan agar aman
 - Master data tahun ajaran, term, level, kelas, siswa, wali, guru, area perkembangan, dan indikator.
 - Jadwal mingguan fleksibel dengan peserta lintas kelas.
 - Pembuatan sesi/presensi dari jadwal mingguan.
-- Input presensi per siswa.
-- Observasi indikator perkembangan per sesi.
+- Sesi Belajar sebagai ruang aktivitas harian guru.
+- Panel presensi ringan per sesi, termasuk Semua Hadir dan Reset Presensi.
+- Observasi terjadwal di dalam sesi belajar.
+- Observasi spontan tanpa wajib terhubung ke sesi belajar.
 - Draft ILP otomatis dari observasi yang butuh stimulasi.
 - Draft rapor otomatis dari observasi, presensi, dan ILP.
 - User dan login dengan role berbasis middleware.
@@ -79,6 +81,17 @@ Ganti password default sebelum dipakai di environment production.
 - `resources/views/errors` - halaman error production-friendly.
 - `database/seeders/DatabaseSeeder.php` - data demo dan akun awal.
 - `tests/Feature/AuthorizationTest.php` - test pembatasan akses.
+
+## Alur Sesi Belajar dan Observasi
+
+Sesi Belajar adalah wadah aktivitas harian guru. Presensi, catatan kelas, observasi cepat, dan tutup sesi berada di ruang yang sama, tetapi presensi tidak menjadi syarat wajib untuk membuat observasi.
+
+Observasi mendukung dua mode:
+
+- Terjadwal: terhubung ke Sesi Belajar, jadwal, kelas, guru, dan siswa.
+- Spontan: tidak wajib terhubung ke sesi; cukup memilih tanggal, guru, siswa, area perkembangan, level perkembangan, dan catatan naratif.
+
+Level perkembangan observasi: `emerging`, `developing`, `independent`, `exceeding`.
 
 ## Catatan Production
 

@@ -95,7 +95,7 @@ class AuthorizationTest extends TestCase
                 'observed_on' => $ownSession->session_date->toDateString(),
                 'note' => 'Observasi scope guru.',
                 'observations' => [
-                    $indicator->id => ['status' => 'achieved'],
+                    $indicator->id => ['status' => 'independent'],
                 ],
             ])
             ->assertRedirect(route('alpha.process.observations').'#monitoring-harian')
@@ -121,7 +121,7 @@ class AuthorizationTest extends TestCase
             'observed_on' => $otherSession->session_date->toDateString(),
             'note' => 'Harus ditolak.',
             'observations' => [
-                $indicator->id => ['status' => 'achieved'],
+                $indicator->id => ['status' => 'independent'],
             ],
         ])->assertForbidden();
     }

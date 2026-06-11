@@ -30,8 +30,8 @@
         ],
         'Proses' => [
             ['key' => 'process.schedules', 'label' => 'Jadwal Mingguan', 'route' => 'alpha.process.schedules', 'dot' => 'coral', 'icon' => 'calendar', 'roles' => $processRoles],
-            ['key' => 'process.sessions', 'label' => 'Sesi & Presensi', 'route' => 'alpha.process.attendance', 'dot' => 'coral', 'icon' => 'clipboard-list', 'roles' => $processRoles],
-            ['key' => 'process.observations', 'label' => 'Observasi', 'route' => 'alpha.process.observations', 'dot' => 'coral', 'icon' => 'clipboard-check', 'roles' => $processRoles],
+            ['key' => 'process.sessions', 'label' => 'Sesi Belajar', 'route' => 'alpha.process.attendance', 'dot' => 'coral', 'icon' => 'clipboard-list', 'roles' => $processRoles],
+            ['key' => 'process.observations', 'label' => 'Ruang Observasi', 'route' => 'alpha.process.observations', 'dot' => 'coral', 'icon' => 'clipboard-check', 'roles' => $processRoles],
             ['key' => 'process.ilp', 'label' => 'ILP', 'route' => 'alpha.process.ilp', 'dot' => 'coral', 'icon' => 'target', 'roles' => $processRoles],
         ],
         'Laporan' => [
@@ -231,6 +231,14 @@
             const dialog = document.getElementById(trigger.dataset.modalTarget);
             if (dialog?.showModal) {
                 dialog.showModal();
+            }
+        });
+    });
+
+    document.querySelectorAll('[data-confirm]').forEach((trigger) => {
+        trigger.addEventListener('click', (event) => {
+            if (!window.confirm(trigger.dataset.confirm)) {
+                event.preventDefault();
             }
         });
     });

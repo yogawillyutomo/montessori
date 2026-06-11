@@ -167,9 +167,10 @@
                 <div class="meta">Preview rapor mengikuti alur observasi, presensi, dan ILP/remedial.</div>
             </div>
             <div class="report-legend">
-                <span><strong class="report-status-pill status-needs-support">SD</strong> Sedang berkembang</span>
-                <span><strong class="report-status-pill status-emerging">SB</strong> Sudah berkembang</span>
-                <span><strong class="report-status-pill status-achieved">SM</strong> Sudah maksimal</span>
+                <span><strong class="report-status-pill status-emerging">MB</strong> Mulai Berkembang</span>
+                <span><strong class="report-status-pill status-developing">B</strong> Berkembang</span>
+                <span><strong class="report-status-pill status-independent">M</strong> Mandiri</span>
+                <span><strong class="report-status-pill status-exceeding">MH</strong> Melebihi Harapan</span>
             </div>
         </div>
 
@@ -334,7 +335,7 @@
                         <div class="report-section">
                             <div class="report-section-title">
                                 <strong>ILP / Remedial</strong>
-                                <span class="meta">Tindak lanjut dari indikator SD.</span>
+                                <span class="meta">Tindak lanjut dari observasi yang membutuhkan follow up.</span>
                             </div>
                             <div class="report-ilp-list">
                                 @forelse ($ilpPlans->take(3) as $plan)

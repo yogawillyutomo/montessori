@@ -156,6 +156,7 @@ class ReportController extends Controller
         $levelName = $student->schoolClass?->classLevel?->name ?? $student->schoolClass?->level;
         $latestObservations = $student->observations()
             ->with(['indicator.developmentArea', 'teacher'])
+            ->where('status', '!=', 'archived')
             ->when($term?->starts_on, fn ($query) => $query->whereDate('observed_on', '>=', $term->starts_on))
             ->when($term?->ends_on, fn ($query) => $query->whereDate('observed_on', '<=', $term->ends_on))
             ->orderBy('observed_on')
@@ -183,7 +184,8 @@ class ReportController extends Controller
             ->map(function (DevelopmentArea $area) use ($latestObservations): array {
                 $indicators = $area->indicators->map(function ($indicator) use ($latestObservations): array {
                     $observation = $latestObservations->get($indicator->id);
-                    $status = $this->observationStatusMeta($observation?->status, $observation?->score);
+                    $level = $observation?->level ?? $observation?->status;
+                    $status = $this->observationStatusMeta($level, $observation?->score);
 
                     return [
                         'id' => $indicator->id,
@@ -194,7 +196,8 @@ class ReportController extends Controller
                         'observed_on' => $observation?->observed_on?->toDateString(),
                         'note' => $observation?->note,
                         'score' => (int) ($observation?->score ?? 0),
-                        'status' => $observation?->status ?? 'not_observed',
+                        'status' => $level ?? 'not_observed',
+                        'needs_follow_up' => (bool) ($observation?->needs_follow_up ?? false),
                         ...$status,
                     ];
                 });
@@ -213,7 +216,7 @@ class ReportController extends Controller
                             'header' => "{$area->name}: {$subArea}",
                             'score' => $score,
                             'observed' => $observedRows->count(),
-                            'needs_support' => $observedRows->where('status', 'needs_support')->count(),
+                            'needs_support' => $observedRows->where('needs_follow_up', true)->count(),
                             'indicators' => $rows->values()->all(),
                             ...$status,
                         ];
@@ -226,7 +229,7 @@ class ReportController extends Controller
                     'color' => $area->color,
                     'score' => $observedIndicators->count() > 0 ? (int) round($observedIndicators->avg('score')) : 0,
                     'observed' => $observedIndicators->count(),
-                    'needs_support' => $observedIndicators->where('status', 'needs_support')->count(),
+                    'needs_support' => $observedIndicators->where('needs_follow_up', true)->count(),
                     'sub_areas' => $subAreas->all(),
                     'indicators' => $indicators->values()->all(),
                 ];
@@ -235,6 +238,7 @@ class ReportController extends Controller
             ->all();
 
         $allObservations = $student->observations()
+            ->where('status', '!=', 'archived')
             ->when($term?->starts_on, fn ($query) => $query->whereDate('observed_on', '>=', $term->starts_on))
             ->when($term?->ends_on, fn ($query) => $query->whereDate('observed_on', '<=', $term->ends_on));
 
@@ -245,7 +249,7 @@ class ReportController extends Controller
             'areas' => $areas,
             'rubric' => $rubric,
             'observation_count' => (clone $allObservations)->count(),
-            'needs_support_count' => (clone $allObservations)->where('status', 'needs_support')->count(),
+            'needs_support_count' => (clone $allObservations)->where('needs_follow_up', true)->count(),
             'ilp_plans' => $this->ilpSummaryForStudent($student, $term),
             'attendance' => $this->attendanceSummaryForStudent(
                 $student,
@@ -332,9 +336,10 @@ class ReportController extends Controller
     private function observationStatusMeta(?string $status, ?int $score): array
     {
         return match ($status) {
-            'achieved' => ['code' => 'SM', 'label' => 'Sudah maksimal', 'tone' => 'achieved', 'observed' => true],
-            'emerging' => ['code' => 'SB', 'label' => 'Sudah berkembang', 'tone' => 'emerging', 'observed' => true],
-            'needs_support' => ['code' => 'SD', 'label' => 'Sedang berkembang', 'tone' => 'needs-support', 'observed' => true],
+            'exceeding' => ['code' => 'MH', 'label' => 'Melebihi Harapan', 'tone' => 'exceeding', 'observed' => true],
+            'independent', 'achieved' => ['code' => 'M', 'label' => 'Mandiri', 'tone' => 'independent', 'observed' => true],
+            'developing' => ['code' => 'B', 'label' => 'Berkembang', 'tone' => 'developing', 'observed' => true],
+            'emerging', 'needs_support' => ['code' => 'MB', 'label' => 'Mulai Berkembang', 'tone' => 'emerging', 'observed' => true],
             default => $this->statusMetaFromScore((int) ($score ?? 0), false),
         };
     }
@@ -348,15 +353,19 @@ class ReportController extends Controller
             return ['code' => '-', 'label' => 'Belum diamati', 'tone' => 'muted', 'observed' => false];
         }
 
-        if ($score >= 85) {
-            return ['code' => 'SM', 'label' => 'Sudah maksimal', 'tone' => 'achieved', 'observed' => true];
+        if ($score >= 95) {
+            return ['code' => 'MH', 'label' => 'Melebihi Harapan', 'tone' => 'exceeding', 'observed' => true];
+        }
+
+        if ($score >= 80) {
+            return ['code' => 'M', 'label' => 'Mandiri', 'tone' => 'independent', 'observed' => true];
         }
 
         if ($score >= 50) {
-            return ['code' => 'SB', 'label' => 'Sudah berkembang', 'tone' => 'emerging', 'observed' => true];
+            return ['code' => 'B', 'label' => 'Berkembang', 'tone' => 'developing', 'observed' => true];
         }
 
-        return ['code' => 'SD', 'label' => 'Sedang berkembang', 'tone' => 'needs-support', 'observed' => true];
+        return ['code' => 'MB', 'label' => 'Mulai Berkembang', 'tone' => 'emerging', 'observed' => true];
     }
 
     /**
@@ -453,6 +462,7 @@ class ReportController extends Controller
     {
         $baseQuery = Attendance::query()
             ->where('student_id', $student->id)
+            ->whereNotNull('marked_at')
             ->whereHas('classSession', function ($query) use ($startsOn, $endsOn): void {
                 $query
                     ->when($startsOn, fn ($sessionQuery) => $sessionQuery->whereDate('session_date', '>=', $startsOn))

@@ -895,6 +895,7 @@ textarea:focus {
 
 .status-achieved,
 .status-completed,
+.status-independent,
 .status-present,
 .status-published {
     background: var(--sage-light);
@@ -903,8 +904,10 @@ textarea:focus {
 }
 
 .status-emerging,
+.status-developing,
 .status-planned,
-.status-draft {
+.status-draft,
+.status-saved {
     background: var(--teal-light);
     color: #0c4a6e;
     border-color: rgba(56, 189, 248, .3);
@@ -916,8 +919,16 @@ textarea:focus {
     border-color: rgba(245, 158, 11, .3);
 }
 
+.status-exceeding,
+.status-included-in-report {
+    background: var(--plum-light);
+    color: #5b21b6;
+    border-color: rgba(167, 139, 250, .32);
+}
+
 .status-empty,
-.status-not-observed {
+.status-not-observed,
+.status-unmarked {
     background: var(--beige);
     color: var(--muted);
     border-color: var(--line);
@@ -2141,11 +2152,22 @@ textarea:focus {
 }
 
 .status-late,
-.status-sick,
-.status-excused {
+.status-sick {
     background: var(--sun-bg);
     color: var(--sun-dark);
     border-color: rgba(245, 158, 11, .25);
+}
+
+.status-excused {
+    background: var(--teal-light);
+    color: #0c4a6e;
+    border-color: rgba(56, 189, 248, .25);
+}
+
+.status-late {
+    background: var(--plum-light);
+    color: #5b21b6;
+    border-color: rgba(167, 139, 250, .32);
 }
 
 .report-area {

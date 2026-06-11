@@ -227,7 +227,7 @@
                 <div class="modal-head">
                     <div>
                         <h3>Tambah Slot Mingguan</h3>
-                        <div class="meta">Buat template slot berulang per minggu. Presensi harian akan menyalin peserta default dari sini.</div>
+                        <div class="meta">Buat template slot berulang per minggu. Sesi belajar akan menyalin peserta default dari sini.</div>
                     </div>
                     <button class="icon-btn" type="button" data-modal-close aria-label="Tutup"><i data-lucide="x" class="nav-icon"></i></button>
                 </div>
@@ -311,7 +311,8 @@
 
     @if ($processSection === 'sessions')
         @php
-            $attendanceOptions = ['present' => 'Hadir', 'absent' => 'Tidak hadir', 'late' => 'Terlambat', 'sick' => 'Sakit', 'excused' => 'Izin'];
+            $attendanceOptions = ['present' => 'Hadir', 'excused' => 'Izin', 'sick' => 'Sakit', 'absent' => 'Alfa / Tidak Hadir', 'late' => 'Terlambat'];
+            $observationLevels = \App\Models\Observation::LEVELS;
             $selectedDate = \Illuminate\Support\Carbon::parse($selectedSessionDate);
             $prevDate = $selectedDate->copy()->subDay()->toDateString();
             $nextDate = $selectedDate->copy()->addDay()->toDateString();
@@ -327,8 +328,8 @@
             <div class="attendance-head">
                 <div>
                     <div class="attendance-location">Purwokerto</div>
-                    <h3>Class Sessions</h3>
-                    <div class="meta">Presensi harian berdasarkan jadwal mingguan dan slot siswa.</div>
+                    <h3>Sesi Belajar Hari Ini</h3>
+                    <div class="meta">Ruang kerja harian guru untuk presensi ringan, observasi cepat, catatan kelas, dan ringkasan sesi.</div>
                 </div>
                 <button class="icon-btn" type="button" aria-label="Opsi presensi"><i data-lucide="more-vertical" class="nav-icon"></i></button>
             </div>
@@ -373,16 +374,20 @@
                         $end = \Illuminate\Support\Carbon::parse($session->ends_at)->format('H:i');
                         $sessionCapacity = $session->capacity ?: $session->schoolClass->capacity;
                         $attendanceByStudent = $session->attendances->keyBy('student_id');
-                        $presentCount = $session->attendances->where('status', 'present')->count();
+                        $recap = $session->attendanceRecap();
+                        $presentCount = $recap['present'];
                         $studentCount = $session->students->count();
-                        $absentCount = $session->attendances->whereIn('status', ['absent', 'sick', 'excused'])->count();
+                        $markedCount = max(0, $studentCount - $recap['unmarked']);
+                        $absentCount = $recap['absent'] + $recap['sick'] + $recap['excused'];
                         $sessionDetailModal = "modal-session-detail-{$session->id}";
                         $sessionAttendanceModal = "modal-session-attendance-{$session->id}";
+                        $sessionObservationModal = "modal-session-observation-{$session->id}";
+                        $sessionNoteModal = "modal-session-note-{$session->id}";
                     @endphp
                     <article class="attendance-session-card">
                         <div class="attendance-session-title">
                             <div>
-                                <h4>{{ strtoupper($session->topic ?: 'Presensi') }} - {{ strtoupper($session->schoolClass->name) }} ({{ $start }})</h4>
+                                <h4>{{ strtoupper($session->topic ?: 'Sesi Belajar') }} - {{ strtoupper($session->schoolClass->name) }} ({{ $start }})</h4>
                                 <div class="attendance-time">
                                     <span class="status status-{{ str_replace('_', '-', $session->status) }}">{{ strtoupper($statusLabels[$session->status] ?? $session->status) }}</span>
                                     {{ $start }} - {{ $end }} (+07)
@@ -390,7 +395,7 @@
                                 <div class="meta">{{ $session->room ?: 'Ruangan belum diisi' }} | {{ $session->teacher->name }}</div>
                             </div>
                             @if ($canWriteProcess)
-                                <button class="btn primary" type="button" data-modal-target="{{ $sessionAttendanceModal }}">Isi Presensi</button>
+                                <button class="btn primary" type="button" data-modal-target="{{ $sessionObservationModal }}">Tambah Observasi Cepat</button>
                             @endif
                         </div>
 
@@ -402,9 +407,9 @@
                                 </span>
                                 <span>
                                     <i data-lucide="users" class="nav-icon"></i>
-                                    <strong>{{ $studentCount }} / {{ $sessionCapacity }}</strong>
+                                    <strong>{{ $markedCount }} / {{ $studentCount }}</strong>
                                 </span>
-                                <small>class info</small>
+                                <small>presensi ditandai</small>
                             </button>
                             <div class="attendance-feed-tile">
                                 <span>
@@ -425,8 +430,14 @@
                         <div class="toolbar compact-actions attendance-card-footer">
                             <button class="btn ghost" type="button" data-modal-target="{{ $sessionDetailModal }}">Detail</button>
                             @if ($canWriteProcess)
-                                <button class="btn ghost" type="button" data-modal-target="{{ $sessionAttendanceModal }}">Edit Presensi</button>
-                                <button class="btn danger" type="button" data-delete-action="{{ route('alpha.process.sessions.destroy', $session) }}" data-delete-label="Hapus presensi {{ $session->schoolClass->name }} tanggal {{ $session->session_date->format('d M Y') }}? Presensi tidak bisa dihapus jika sudah punya observasi.">Hapus</button>
+                                <button class="btn ghost" type="button" data-modal-target="{{ $sessionAttendanceModal }}">Panel Presensi</button>
+                                <button class="btn ghost" type="button" data-modal-target="{{ $sessionNoteModal }}">Catatan Kelas</button>
+                                <form method="post" action="{{ route('alpha.process.sessions.close', $session) }}">
+                                    @csrf
+                                    @method('patch')
+                                    <button class="btn teal" type="submit" data-confirm="Tutup sesi belajar ini? Sistem tetap menyimpan sesi meski presensi belum lengkap.">Tutup Sesi</button>
+                                </form>
+                                <button class="btn danger" type="button" data-delete-action="{{ route('alpha.process.sessions.destroy', $session) }}" data-delete-label="Hapus sesi belajar {{ $session->schoolClass->name }} tanggal {{ $session->session_date->format('d M Y') }}? Sesi tidak bisa dihapus jika sudah punya observasi.">Hapus</button>
                             @endif
                         </div>
                     </article>
@@ -454,6 +465,22 @@
                                     <strong>{{ $studentCount }} / {{ $sessionCapacity }}</strong>
                                 </div>
                                 <div>
+                                    <span class="meta">Ditandai</span>
+                                    <strong>{{ $markedCount }} / {{ $studentCount }}</strong>
+                                </div>
+                                <div>
+                                    <span class="meta">Hadir</span>
+                                    <strong>{{ $recap['present'] }}</strong>
+                                </div>
+                                <div>
+                                    <span class="meta">Izin/Sakit/Alfa/Terlambat</span>
+                                    <strong>{{ $recap['excused'] + $recap['sick'] + $recap['absent'] + $recap['late'] }}</strong>
+                                </div>
+                                <div>
+                                    <span class="meta">Belum Ditandai</span>
+                                    <strong>{{ $recap['unmarked'] }}</strong>
+                                </div>
+                                <div>
                                     <span class="meta">Topik</span>
                                     <strong>{{ $session->topic ?: '-' }}</strong>
                                 </div>
@@ -478,7 +505,7 @@
                                             <td><strong>{{ $student->name }}</strong><br><span class="meta">{{ $student->code }}</span></td>
                                             <td>{{ $student->schoolClass?->name ?? '-' }}</td>
                                             <td>{{ $student->guardian?->name ?? '-' }}<br><span class="meta">{{ $student->guardian?->phone ?? '-' }}</span></td>
-                                            <td><span class="status status-{{ $attendance?->status ?? 'empty' }}">{{ $attendanceOptions[$attendance?->status] ?? '-' }}</span></td>
+                                            <td><span class="status {{ $attendance?->status_badge_class ?? 'status-unmarked' }}">{{ $attendance?->status_label ?? 'Belum Ditandai' }}</span></td>
                                             <td>{{ $attendance?->note ?: '-' }}</td>
                                         </tr>
                                     @empty
@@ -497,15 +524,20 @@
                             @method('patch')
                             <div class="modal-head">
                                 <div>
-                                    <h3>Isi Presensi</h3>
-                                    <div class="meta">{{ $session->session_date->format('d M Y') }} | {{ $session->schoolClass->name }} | {{ $start }}-{{ $end }}</div>
+                                    <h3>Panel Presensi</h3>
+                                    <div class="meta">{{ $markedCount }} dari {{ $studentCount }} siswa sudah ditandai | {{ $session->session_date->format('d M Y') }} | {{ $session->schoolClass->name }} | {{ $start }}-{{ $end }}</div>
                                 </div>
                                 <button class="icon-btn" type="button" data-modal-close aria-label="Tutup"><i data-lucide="x" class="nav-icon"></i></button>
+                            </div>
+                            <div class="toolbar compact-actions" style="margin-bottom: 12px">
+                                <button class="btn teal" type="submit" name="attendance_action" value="all_present">Semua Hadir</button>
+                                <button class="btn ghost" type="submit" name="attendance_action" value="reset">Reset Presensi</button>
                             </div>
                             <div class="attendance-list">
                                 @forelse ($session->students as $student)
                                     @php
                                         $attendance = $attendanceByStudent->get($student->id);
+                                        $selectedAttendanceStatus = $attendance?->marked_at ? $attendance->status : 'unmarked';
                                     @endphp
                                     <div class="line-card soft attendance-row">
                                         <div>
@@ -515,8 +547,9 @@
                                         <div class="field">
                                             <label>Status</label>
                                             <select name="attendance[{{ $student->id }}][status]">
+                                                <option value="unmarked" @selected($selectedAttendanceStatus === 'unmarked')>Belum Ditandai</option>
                                                 @foreach ($attendanceOptions as $status => $label)
-                                                    <option value="{{ $status }}" @selected(($attendance?->status ?? 'present') === $status)>{{ $label }}</option>
+                                                    <option value="{{ $status }}" @selected($selectedAttendanceStatus === $status)>{{ $label }}</option>
                                                 @endforeach
                                             </select>
                                         </div>
@@ -531,8 +564,107 @@
                             </div>
                             <div class="toolbar modal-actions">
                                 <button class="btn ghost" type="button" data-modal-close>Batal</button>
-                                <button class="btn primary" type="submit">Simpan Presensi</button>
+                                <button class="btn primary" type="submit" name="attendance_action" value="save">Simpan Presensi</button>
                             </div>
+                            </form>
+                        </dialog>
+
+                        <dialog class="modal wide-modal" id="{{ $sessionObservationModal }}">
+                            <form method="post" action="{{ route('alpha.observations.store') }}">
+                                @csrf
+                                <input type="hidden" name="class_session_id" value="{{ $session->id }}">
+                                <input type="hidden" name="teacher_id" value="{{ $session->teacher_id }}">
+                                <div class="modal-head">
+                                    <div>
+                                        <h3>Tambah Observasi Cepat</h3>
+                                        <div class="meta">{{ $session->schoolClass->name }} | {{ $session->session_date->format('d M Y') }} | presensi tidak wajib lengkap.</div>
+                                    </div>
+                                    <button class="icon-btn" type="button" data-modal-close aria-label="Tutup"><i data-lucide="x" class="nav-icon"></i></button>
+                                </div>
+                                <div class="form-grid">
+                                    <div class="field">
+                                        <label>Siswa</label>
+                                        <select name="student_id" required>
+                                            @foreach ($session->students as $student)
+                                                <option value="{{ $student->id }}">{{ $student->name }} - {{ $student->code }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="field">
+                                        <label>Tanggal</label>
+                                        <input type="date" name="observed_on" value="{{ $session->session_date->toDateString() }}" required>
+                                    </div>
+                                    <div class="field">
+                                        <label>Area perkembangan</label>
+                                        <select name="development_area_id" required>
+                                            <option value="">Pilih area</option>
+                                            @foreach ($developmentAreas as $area)
+                                                <option value="{{ $area->id }}">{{ $area->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="field">
+                                        <label>Indikator opsional</label>
+                                        <select name="indicator_id">
+                                            <option value="">Tanpa indikator spesifik</option>
+                                            @foreach ($indicators as $indicator)
+                                                <option value="{{ $indicator->id }}">{{ $indicator->code }} - {{ $indicator->description }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="field wide">
+                                        <label>Level perkembangan</label>
+                                        <select name="level" required>
+                                            @foreach ($observationLevels as $level => $label)
+                                                <option value="{{ $level }}">{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="field wide">
+                                        <label>Catatan naratif</label>
+                                        <textarea name="note" required placeholder="Tuliskan momen konkret yang diamati, konteks, dan respons anak."></textarea>
+                                    </div>
+                                    <label class="check-row">
+                                        <input type="checkbox" name="needs_follow_up" value="1">
+                                        <span>Perlu tindak lanjut / ILP</span>
+                                    </label>
+                                    <label class="check-row">
+                                        <input type="checkbox" name="include_in_report" value="1" checked>
+                                        <span>Masukkan sebagai bahan rapor</span>
+                                    </label>
+                                </div>
+                                <div class="toolbar modal-actions">
+                                    <button class="btn ghost" type="button" data-modal-close>Batal</button>
+                                    <button class="btn primary" type="submit">Simpan Observasi</button>
+                                </div>
+                            </form>
+                        </dialog>
+
+                        <dialog class="modal wide-modal" id="{{ $sessionNoteModal }}">
+                            <form method="post" action="{{ route('alpha.process.sessions.note', $session) }}">
+                                @csrf
+                                @method('patch')
+                                <div class="modal-head">
+                                    <div>
+                                        <h3>Catatan Kelas</h3>
+                                        <div class="meta">Catatan ini masuk ringkasan sesi belajar dan bahan refleksi guru.</div>
+                                    </div>
+                                    <button class="icon-btn" type="button" data-modal-close aria-label="Tutup"><i data-lucide="x" class="nav-icon"></i></button>
+                                </div>
+                                <div class="form-grid">
+                                    <div class="field wide">
+                                        <label>Catatan kelas</label>
+                                        <textarea name="class_note" placeholder="Ringkasan suasana kelas, dinamika kelompok, atau momen penting.">{{ old('class_note', $session->class_note) }}</textarea>
+                                    </div>
+                                    <div class="field wide">
+                                        <label>Rekomendasi tindak lanjut</label>
+                                        <textarea name="follow_up_recommendation" placeholder="Rencana follow up untuk sesi berikutnya.">{{ old('follow_up_recommendation', $session->follow_up_recommendation) }}</textarea>
+                                    </div>
+                                </div>
+                                <div class="toolbar modal-actions">
+                                    <button class="btn ghost" type="button" data-modal-close>Batal</button>
+                                    <button class="btn primary" type="submit">Simpan Catatan</button>
+                                </div>
                             </form>
                         </dialog>
                     @endif
@@ -542,7 +674,7 @@
                             <i data-lucide="calendar-x" class="nav-icon"></i>
                         </div>
                         <strong>Belum ada presensi pada tanggal ini</strong>
-                        <span>Pilih tanggal lain atau buat presensi dari slot mingguan.</span>
+                        <span>Pilih tanggal lain atau buat sesi belajar dari slot mingguan.</span>
                     </div>
                 @endforelse
             </div>
@@ -554,7 +686,7 @@
                 @if ($canWriteProcess)
                     <button class="btn primary attendance-start-button" type="button" data-modal-target="modal-create-session">
                         <i data-lucide="plus-circle" class="nav-icon"></i>
-                        Buat Presensi
+                        Buat Sesi Belajar
                     </button>
                 @endif
             </div>
@@ -566,8 +698,8 @@
                 @csrf
                 <div class="modal-head">
                     <div>
-                        <h3>Buat Presensi dari Jadwal</h3>
-                        <div class="meta">Presensi mengambil jam, ruangan, dan peserta dari jadwal mingguan.</div>
+                        <h3>Buat Sesi Belajar dari Jadwal</h3>
+                        <div class="meta">Sesi belajar mengambil jam, ruangan, dan peserta dari jadwal mingguan. Presensi bisa diisi kapan saja.</div>
                     </div>
                     <button class="icon-btn" type="button" data-modal-close aria-label="Tutup"><i data-lucide="x" class="nav-icon"></i></button>
                 </div>
@@ -587,13 +719,13 @@
                         </select>
                     </div>
                     <div class="field">
-                        <label for="session_date">Tanggal presensi</label>
+                        <label for="session_date">Tanggal sesi belajar</label>
                         <input id="session_date" name="session_date" type="date" value="{{ $defaultSessionDate }}" data-session-date-input required>
                     </div>
                 </div>
                 <div class="toolbar modal-actions">
                     <button class="btn ghost" type="button" data-modal-close>Batal</button>
-                    <button class="btn primary" type="submit">Buat Presensi</button>
+                    <button class="btn primary" type="submit">Buat Sesi Belajar</button>
                 </div>
                 </form>
             </dialog>
@@ -602,26 +734,109 @@
 
     @if ($processSection === 'observations')
         @php
-            $observationStatuses = [
-                'needs_support' => ['code' => 'SD', 'label' => 'Sedang berkembang', 'symbol' => '❌', 'class' => 'sd'],
-                'emerging' => ['code' => 'SB', 'label' => 'Sudah berkembang', 'symbol' => '⭕', 'class' => 'sb'],
-                'achieved' => ['code' => 'SM', 'label' => 'Sudah maksimal', 'symbol' => '✔️', 'class' => 'sm'],
-            ];
             $groupedIndicators = $indicators->groupBy(fn ($indicator) => $indicator->developmentArea?->name ?? 'Tanpa area');
             $observationStatuses = [
-                'needs_support' => ['code' => 'SD', 'label' => 'Sedang berkembang', 'symbol' => '&#10060;', 'class' => 'sd'],
-                'emerging' => ['code' => 'SB', 'label' => 'Sudah berkembang', 'symbol' => '&#11093;', 'class' => 'sb'],
-                'achieved' => ['code' => 'SM', 'label' => 'Sudah maksimal', 'symbol' => '&#10004;&#65039;', 'class' => 'sm'],
+                'emerging' => ['code' => 'MB', 'label' => 'Mulai Berkembang', 'class' => 'sd'],
+                'developing' => ['code' => 'B', 'label' => 'Berkembang', 'class' => 'sb'],
+                'independent' => ['code' => 'M', 'label' => 'Mandiri', 'class' => 'sm'],
+                'exceeding' => ['code' => 'MH', 'label' => 'Melebihi Harapan', 'class' => 'sm'],
             ];
             $areaCount = $groupedIndicators->count();
             $selectedStudent = $students->firstWhere('id', (int) old('student_id')) ?? $students->first();
         @endphp
 
+        @if ($canWriteProcess)
+            <section class="panel observation-panel" id="observasi-spontan">
+                <div class="line-head">
+                    <div>
+                        <h3>Observasi Spontan</h3>
+                        <div class="meta">Catat momen anak kapan saja: kegiatan bebas, transisi, makan bersama, kedatangan pagi, atau interaksi sosial.</div>
+                    </div>
+                </div>
+                <form method="post" action="{{ route('alpha.observations.store') }}" class="form-grid" style="margin-top: 14px">
+                    @csrf
+                    <div class="field">
+                        <label>Siswa</label>
+                        <select name="student_id" required>
+                            <option value="">Pilih siswa</option>
+                            @foreach ($students as $student)
+                                <option value="{{ $student->id }}" @selected((int) old('student_id') === $student->id)>{{ $student->name }} - {{ $student->schoolClass?->name ?? '-' }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>Guru</label>
+                        <select name="teacher_id" required>
+                            @foreach ($teachers as $teacher)
+                                <option value="{{ $teacher->id }}" @selected((int) old('teacher_id') === $teacher->id)>{{ $teacher->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>Tanggal</label>
+                        <input type="date" name="observed_on" value="{{ old('observed_on', now()->toDateString()) }}" required>
+                    </div>
+                    <div class="field">
+                        <label>Sesi Belajar</label>
+                        <select name="class_session_id">
+                            <option value="">Tanpa sesi belajar</option>
+                            @foreach ($sessions as $session)
+                                <option value="{{ $session->id }}" @selected((int) old('class_session_id') === $session->id)>
+                                    {{ $session->session_date->format('d M') }} | {{ $session->schoolClass->name }} | {{ $session->topic }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>Area perkembangan</label>
+                        <select name="development_area_id" required>
+                            <option value="">Pilih area</option>
+                            @foreach ($developmentAreas as $area)
+                                <option value="{{ $area->id }}" @selected((int) old('development_area_id') === $area->id)>{{ $area->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>Indikator opsional</label>
+                        <select name="indicator_id">
+                            <option value="">Tanpa indikator spesifik</option>
+                            @foreach ($indicators as $indicator)
+                                <option value="{{ $indicator->id }}" @selected((int) old('indicator_id') === $indicator->id)>{{ $indicator->code }} - {{ $indicator->description }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="field wide">
+                        <label>Level perkembangan</label>
+                        <select name="level" required>
+                            @foreach (\App\Models\Observation::LEVELS as $level => $label)
+                                <option value="{{ $level }}" @selected(old('level') === $level)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="field wide">
+                        <label>Catatan naratif</label>
+                        <textarea name="note" required placeholder="Tuliskan momen konkret, konteks, respons anak, dan kebutuhan tindak lanjut.">{{ old('note') }}</textarea>
+                    </div>
+                    <label class="check-row">
+                        <input type="checkbox" name="needs_follow_up" value="1" @checked(old('needs_follow_up'))>
+                        <span>Perlu tindak lanjut / ILP</span>
+                    </label>
+                    <label class="check-row">
+                        <input type="checkbox" name="include_in_report" value="1" @checked(old('include_in_report', true))>
+                        <span>Masukkan sebagai bahan rapor</span>
+                    </label>
+                    <div class="toolbar wide">
+                        <button class="btn primary" type="submit">Simpan Observasi Spontan</button>
+                    </div>
+                </form>
+            </section>
+        @endif
+
         <section class="panel observation-panel" id="monitoring-harian">
             <div class="line-head">
                 <div>
-                    <h3>Monitoring Harian</h3>
-                    <div class="meta">Format mengikuti sheet MONITORING HARIAN: SD, SB, dan SM per indikator perkembangan.</div>
+                    <h3>Observasi Terjadwal</h3>
+                    <div class="meta">Terhubung ke Sesi Belajar, jadwal, kelas, guru, dan siswa. Presensi tidak wajib lengkap untuk mencatat observasi.</div>
                 </div>
             </div>
 
@@ -631,7 +846,7 @@
                     @csrf
                 <div class="observation-context-grid">
                     <div class="field">
-                        <label for="class_session_id">Presensi</label>
+                        <label for="class_session_id">Sesi Belajar</label>
                         <select id="class_session_id" name="class_session_id" data-observation-session-select required>
                             @foreach ($sessions as $session)
                                 @php
@@ -691,7 +906,6 @@
                 <div class="observation-legend">
                     @foreach ($observationStatuses as $status)
                         <span class="observation-legend-item observation-choice-{{ $status['class'] }}">
-                            <span>{!! $status['symbol'] !!}</span>
                             <strong>{{ $status['code'] }}</strong>
                             {{ $status['label'] }}
                         </span>
@@ -739,7 +953,6 @@
                                                     @checked($oldStatus === $statusValue)
                                                 >
                                                 <button class="observation-choice observation-choice-{{ $status['class'] }}" type="button" data-observation-choice-for="{{ $inputId }}" title="{{ $status['label'] }}">
-                                                    <span>{!! $status['symbol'] !!}</span>
                                                     <strong>{{ $status['code'] }}</strong>
                                                 </button>
                                             @endforeach
@@ -786,50 +999,47 @@
                         <th>Tanggal</th>
                         <th>Siswa</th>
                         <th>Kelas</th>
+                        <th>Tipe</th>
                         <th>Area</th>
                         <th>Indikator</th>
+                        <th>Level</th>
                         <th>Status</th>
                         <th>Catatan</th>
-                        <th>Aksi</th>
                     </tr>
                     </thead>
                     <tbody>
                     @forelse ($observations as $observation)
                         @php
-                            $statusMeta = $observationStatuses[$observation->status] ?? null;
+                            $statusMeta = $observationStatuses[$observation->level] ?? null;
                         @endphp
                         <tr>
                             <td>{{ $observation->observed_on->format('d M Y') }}</td>
                             <td><strong>{{ $observation->student->name }}</strong></td>
                             <td>{{ $observation->student->schoolClass->name }}</td>
-                            <td>{{ $observation->indicator->developmentArea->name }}</td>
+                            <td>{{ $observation->observation_type === 'spontaneous' ? 'Spontan' : 'Terjadwal' }}</td>
+                            <td>{{ $observation->developmentArea?->name ?? $observation->indicator?->developmentArea?->name ?? '-' }}</td>
                             <td>
-                                <strong>{{ $observation->indicator->code }}</strong><br>
-                                <span class="meta">{{ $observation->indicator->description }}</span>
+                                @if ($observation->indicator)
+                                    <strong>{{ $observation->indicator->code }}</strong><br>
+                                    <span class="meta">{{ $observation->indicator->description }}</span>
+                                @else
+                                    <span class="meta">Tanpa indikator spesifik</span>
+                                @endif
                             </td>
                             <td>
                                 @if ($statusMeta)
-                                    <span class="status status-{{ str_replace('_', '-', $observation->status) }}">
-                                        {{ $statusMeta['code'] }} {!! $statusMeta['symbol'] !!}
+                                    <span class="status {{ $observation->level_badge_class }}">
+                                        {{ $statusMeta['code'] }} - {{ $statusMeta['label'] }}
                                     </span>
                                 @else
-                                    <span class="status status-{{ str_replace('_', '-', $observation->status) }}">{{ $statusLabels[$observation->status] ?? $observation->status }}</span>
+                                    <span class="status status-empty">-</span>
                                 @endif
                             </td>
+                            <td><span class="status {{ $observation->status_badge_class }}">{{ $observation->status_label }}</span></td>
                             <td>{{ $observation->note ?: '-' }}</td>
-                            <td>
-                                <button
-                                    class="btn ghost"
-                                    type="button"
-                                    data-edit-monitoring
-                                    data-edit-session-id="{{ $observation->class_session_id }}"
-                                    data-edit-student-id="{{ $observation->student_id }}"
-                                    data-edit-date="{{ $observation->observed_on->toDateString() }}"
-                                >Edit</button>
-                            </td>
                         </tr>
                     @empty
-                        <tr><td colspan="8">Belum ada observasi.</td></tr>
+                        <tr><td colspan="9">Belum ada observasi.</td></tr>
                     @endforelse
                     </tbody>
                 </table>
@@ -853,7 +1063,7 @@
             <div class="section-head">
                 <div>
                     <h2>ILP / Remedial</h2>
-                    <div class="meta">Tindak lanjut otomatis dari observasi SD. Guru bisa merapikan analisis, target, dan follow up sebelum masuk rapor.</div>
+                    <div class="meta">Tindak lanjut otomatis dari observasi yang ditandai perlu follow up. Guru bisa merapikan analisis, target, dan follow up sebelum masuk rapor.</div>
                 </div>
             </div>
 
@@ -981,7 +1191,7 @@
                             <i data-lucide="target" class="nav-icon"></i>
                         </div>
                         <strong>Belum ada ILP</strong>
-                        <span>ILP otomatis muncul saat observasi berstatus SD.</span>
+                        <span>ILP otomatis muncul saat observasi ditandai perlu tindak lanjut.</span>
                     </div>
                 @endforelse
             </div>

@@ -84,7 +84,9 @@ Route::middleware('auth')->group(function (): void {
     Route::middleware('role:super_admin,admin,teacher')->group(function (): void {
         Route::post('/sessions/from-schedule', [ProcessController::class, 'createSession'])->name('alpha.sessions.create-from-schedule');
         Route::patch('/process/sessions/{classSession}', [ProcessController::class, 'updateSession'])->name('alpha.process.sessions.update');
+        Route::patch('/process/sessions/{classSession}/note', [ProcessController::class, 'updateSessionNote'])->name('alpha.process.sessions.note');
         Route::patch('/process/sessions/{classSession}/attendance', [ProcessController::class, 'updateSessionAttendance'])->name('alpha.process.sessions.attendance');
+        Route::patch('/process/sessions/{classSession}/close', [ProcessController::class, 'closeSession'])->name('alpha.process.sessions.close');
         Route::delete('/process/sessions/{classSession}', [ProcessController::class, 'destroySession'])->name('alpha.process.sessions.destroy');
         Route::post('/observations', [ProcessController::class, 'storeObservation'])->name('alpha.observations.store');
         Route::patch('/process/ilp/{ilpPlan}', [ProcessController::class, 'updateIlp'])->name('alpha.process.ilp.update');
