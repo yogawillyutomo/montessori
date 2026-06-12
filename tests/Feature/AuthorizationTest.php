@@ -23,6 +23,10 @@ class AuthorizationTest extends TestCase
             ->get('/master/students')
             ->assertForbidden();
 
+        $this->actingAs($this->user('parent@montessori.test'))
+            ->get('/process/attendance')
+            ->assertForbidden();
+
         $this->actingAs($this->user('raras@montessori.test'))
             ->get('/settings/users')
             ->assertForbidden();
@@ -57,6 +61,8 @@ class AuthorizationTest extends TestCase
 
         $this->get(route('alpha.reports.show', $ownReport))->assertOk();
         $this->get(route('alpha.reports.show', $otherReport))->assertForbidden();
+        $this->get(route('alpha.reports.student', ['student' => $alya, 'term_id' => $ownReport->term_id]))->assertOk();
+        $this->get(route('alpha.reports.student', ['student' => $kirana, 'term_id' => $otherReport->term_id]))->assertForbidden();
     }
 
     public function test_parent_cannot_open_own_draft_report(): void

@@ -543,6 +543,10 @@ textarea {
     grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.grid.four {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .metric {
     padding: 20px;
     min-height: 118px;
@@ -874,6 +878,12 @@ textarea:focus {
     letter-spacing: 0.04em;
 }
 
+.field-error {
+    color: #b91c1c;
+    font-size: .78rem;
+    font-weight: 700;
+}
+
 .wide {
     grid-column: 1 / -1;
 }
@@ -907,6 +917,7 @@ textarea:focus {
 .status-developing,
 .status-planned,
 .status-draft,
+.status-ready,
 .status-saved {
     background: var(--teal-light);
     color: #0c4a6e;
@@ -927,11 +938,18 @@ textarea:focus {
 }
 
 .status-empty,
+.status-not-created,
 .status-not-observed,
 .status-unmarked {
     background: var(--beige);
     color: var(--muted);
     border-color: var(--line);
+}
+
+.status-archived {
+    background: #f3f4f6;
+    color: #374151;
+    border-color: #d1d5db;
 }
 
 .status-in-progress {
@@ -2411,7 +2429,8 @@ textarea:focus {
 @media (max-width: 1180px) {
 
     .grid.kpi,
-    .grid.three {
+    .grid.three,
+    .grid.four {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
@@ -2569,6 +2588,7 @@ textarea:focus {
     .grid.kpi,
     .grid.two,
     .grid.three,
+    .grid.four,
     .form-grid,
     .date-grid,
     .report-filter-form {

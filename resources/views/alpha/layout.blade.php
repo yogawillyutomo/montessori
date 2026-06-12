@@ -30,12 +30,11 @@
         ],
         'Proses' => [
             ['key' => 'process.schedules', 'label' => 'Jadwal Mingguan', 'route' => 'alpha.process.schedules', 'dot' => 'coral', 'icon' => 'calendar', 'roles' => $processRoles],
-            ['key' => 'process.sessions', 'label' => 'Sesi Belajar', 'route' => 'alpha.process.attendance', 'dot' => 'coral', 'icon' => 'clipboard-list', 'roles' => $processRoles],
             ['key' => 'process.observations', 'label' => 'Ruang Observasi', 'route' => 'alpha.process.observations', 'dot' => 'coral', 'icon' => 'clipboard-check', 'roles' => $processRoles],
             ['key' => 'process.ilp', 'label' => 'ILP', 'route' => 'alpha.process.ilp', 'dot' => 'coral', 'icon' => 'target', 'roles' => $processRoles],
         ],
         'Laporan' => [
-            ['key' => 'reports', 'label' => 'Rapor & Rekap', 'route' => 'alpha.reports', 'dot' => 'blue', 'icon' => 'file-text', 'roles' => $reportRoles],
+            ['key' => 'reports', 'label' => 'Rapor Siswa', 'route' => 'alpha.reports', 'dot' => 'blue', 'icon' => 'file-text', 'roles' => $reportRoles],
         ],
         'Setting' => [
             ['key' => 'settings.users', 'label' => 'User & Login', 'route' => 'alpha.settings.users', 'dot' => 'plum', 'icon' => 'settings', 'roles' => ['super_admin']],

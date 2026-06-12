@@ -2,7 +2,7 @@
 
 @section('title', 'Dashboard - Montessori Bloom')
 @section('page_title', 'Dashboard Monitoring')
-@section('page_subtitle', 'Ringkasan dari master data, proses harian, dan draft laporan.')
+@section('page_subtitle', 'Ringkasan dari master data, observasi harian, dan draft laporan.')
 
 @section('content')
     <div class="section-head">
@@ -15,7 +15,7 @@
                 <a class="btn ghost" href="{{ route('alpha.master') }}">Buka Master</a>
             @endif
             @if (in_array($activeRole, ['super_admin', 'admin', 'teacher', 'principal'], true))
-                <a class="btn teal" href="{{ route('alpha.process') }}">{{ $activeRole === 'principal' ? 'Lihat Proses' : 'Input Proses' }}</a>
+                <a class="btn teal" href="{{ route('alpha.process.observations') }}">{{ $activeRole === 'principal' ? 'Lihat Observasi' : 'Input Observasi' }}</a>
             @endif
             <a class="btn ghost" href="{{ route('alpha.reports') }}">Lihat Rapor</a>
         </div>
@@ -59,7 +59,7 @@
                 </div>
                 <div class="line-card">
                     <strong>2. Proses Harian</strong>
-                    <div class="meta">Jadwal mingguan, presensi, observasi, dan ILP.</div>
+                    <div class="meta">Jadwal mingguan, ruang observasi, catatan kelas, dan ILP.</div>
                 </div>
                 <div class="line-card">
                     <strong>3. Laporan</strong>
@@ -99,7 +99,7 @@
         </section>
 
         <section class="panel panel-binder">
-            <h3>Presensi Terakhir</h3>
+            <h3>Sesi Belajar Terakhir</h3>
             <div class="card-list" style="margin-top: 14px">
                 @forelse ($sessions as $session)
                     @php
@@ -121,7 +121,7 @@
                         </div>
                     </div>
                 @empty
-                    <div class="line-card">Belum ada presensi.</div>
+                    <div class="line-card">Belum ada sesi belajar.</div>
                 @endforelse
             </div>
         </section>

@@ -32,7 +32,11 @@ class ExampleTest extends TestCase
         $this->get('/')->assertStatus(200)->assertSee('Dashboard Monitoring');
         $this->get('/master')->assertStatus(200)->assertSee('Master Data');
         $this->get('/process')->assertStatus(200)->assertSee('Proses Harian');
-        $this->get('/reports')->assertStatus(200)->assertSee('Draft Rapor Otomatis')->assertSee('Rekap Presensi');
+        $this->get('/reports')
+            ->assertStatus(200)
+            ->assertSee('Rapor Siswa')
+            ->assertSee('Daftar Siswa untuk Rapor')
+            ->assertDontSee('Rekap Presensi');
         $this->get('/settings/users')->assertStatus(200)->assertSee('User &amp; Login', false);
     }
 
@@ -153,47 +157,84 @@ class ExampleTest extends TestCase
             ->assertDontSee('Alya Pramesti');
     }
 
-    public function test_reports_include_attendance_recap_for_report_summary(): void
+    public function test_reports_are_student_first_and_store_manual_attendance(): void
     {
         $this->seed();
         $this->signIn();
 
         $student = Student::query()->where('code', 'SUN01')->firstOrFail();
-        Attendance::query()
-            ->where('student_id', $student->id)
-            ->orderBy('id')
-            ->firstOrFail()
-            ->update(['status' => 'late']);
+        $term = \App\Models\Term::query()->where('is_current', true)->firstOrFail();
 
-        $this->get('/reports?starts_on=2026-06-01&ends_on=2026-06-30')
+        Report::query()->where('student_id', $student->id)->delete();
+
+        $this->get('/reports')
             ->assertStatus(200)
-            ->assertSee('Rekap Presensi')
             ->assertSee('Alya Pramesti')
-            ->assertSee('100%');
+            ->assertSee('Belum Dibuat')
+            ->assertDontSee('Rekap Presensi');
 
-        $this->post(route('alpha.reports.generate'))->assertRedirect();
+        $this->post(route('alpha.reports.students.draft', ['student' => $student, 'term_id' => $term->id]))
+            ->assertRedirect();
 
         $report = Report::query()
             ->where('student_id', $student->id)
             ->firstOrFail();
 
-        $this->assertSame(2, $report->summary['attendance']['recorded']);
-        $this->assertSame(1, $report->summary['attendance']['late']);
-        $this->assertEquals(100, $report->summary['attendance']['attendance_rate']);
+        $this->assertSame('draft', $report->status);
         $this->assertSame('Alya Pramesti', $report->summary['biodata']['name']);
-        $this->assertNotEmpty($report->summary['rubric']);
+        $this->assertSame(0, $report->summary['attendance']['recorded']);
         $this->assertArrayHasKey('ilp_plans', $report->summary);
 
-        $this->get('/reports')
-            ->assertStatus(200)
-            ->assertSee('Capaian Perkembangan')
-            ->assertSee('ILP / Remedial');
+        $this->from(route('alpha.reports.student', ['student' => $student, 'term_id' => $term->id]))
+            ->patch(route('alpha.reports.students.update', ['student' => $student, 'term_id' => $term->id]), [
+                'term_id' => $term->id,
+                'status' => 'ready',
+                'manual_present_total' => 18,
+                'manual_sick_total' => 1,
+                'manual_excused_total' => 0,
+                'manual_absent_total' => 0,
+                'manual_late_total' => 2,
+                'manual_attendance_note' => 'Kehadiran baik dan dua kali terlambat.',
+                'teacher_narrative' => 'Alya menunjukkan rasa ingin tahu yang stabil.',
+                'general_narrative' => 'Alya mengikuti ritme kelas dengan nyaman.',
+            ])
+            ->assertRedirect(route('alpha.reports.student', ['student' => $student, 'term_id' => $term->id]))
+            ->assertSessionDoesntHaveErrors();
+
+        $report->refresh();
+
+        $this->assertSame('ready', $report->status);
+        $this->assertSame(18, $report->manual_present_total);
+        $this->assertSame(2, $report->manual_late_total);
+        $this->assertSame(21, $report->summary['attendance']['recorded']);
+        $this->assertEquals(95.2, $report->summary['attendance']['attendance_rate']);
+
+        $this->from(route('alpha.reports.student', ['student' => $student, 'term_id' => $term->id]))
+            ->patch(route('alpha.reports.students.update', ['student' => $student, 'term_id' => $term->id]), [
+                'term_id' => $term->id,
+                'status' => 'draft',
+                'manual_present_total' => -1,
+            ])
+            ->assertRedirect(route('alpha.reports.student', ['student' => $student, 'term_id' => $term->id]))
+            ->assertSessionHasErrors('manual_present_total');
 
         $this->get(route('alpha.reports.show', $report))
             ->assertStatus(200)
-            ->assertSee('Rapor Per Siswa')
-            ->assertSee('Development Progress')
-            ->assertSee("Teacher's Message", false);
+            ->assertSee('Detail Rapor Siswa')
+            ->assertSee('Data Kehadiran Manual untuk Rapor')
+            ->assertSee('Alya menunjukkan rasa ingin tahu yang stabil.');
+    }
+
+    public function test_main_navigation_hides_attendance_menu(): void
+    {
+        $this->seed();
+        $this->signIn();
+
+        $this->get('/reports')
+            ->assertOk()
+            ->assertDontSee('Sesi Belajar')
+            ->assertDontSee('Panel Presensi')
+            ->assertDontSee('Presensi Terakhir');
     }
 
     public function test_weekly_schedule_rejects_overlapping_room(): void

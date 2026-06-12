@@ -17,26 +17,36 @@ class AccessScopeService
      */
     public function accessibleStudentIds(User $user): array
     {
+        return $this->accessibleStudentsQuery($user)
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+    }
+
+    public function accessibleStudentsQuery(User $user): Builder
+    {
         if (Role::hasGlobalAccess($user->role)) {
-            return Student::query()->pluck('id')->map(fn ($id): int => (int) $id)->all();
+            return Student::query();
         }
 
         if ($user->role === Role::TEACHER) {
             $teacher = $this->teacherFor($user);
 
-            return $teacher
-                ? $this->studentIdsScheduledWithTeacher($teacher->id)
-                : [];
+            return Student::query()
+                ->when($teacher, fn (Builder $query) => $this->scopeStudentsForTeacher($query, $teacher->id))
+                ->when(! $teacher, fn (Builder $query) => $query->whereRaw('1 = 0'));
         }
 
         if ($user->role === Role::PARENT) {
-            return $user->guardian?->students()
-                ->pluck('id')
-                ->map(fn ($id): int => (int) $id)
-                ->all() ?? [];
+            return Student::query()
+                ->when(
+                    $user->guardian,
+                    fn (Builder $query) => $query->where('guardian_id', $user->guardian->id),
+                    fn (Builder $query) => $query->whereRaw('1 = 0')
+                );
         }
 
-        return [];
+        return Student::query()->whereRaw('1 = 0');
     }
 
     /**
@@ -77,6 +87,28 @@ class AccessScopeService
         return [];
     }
 
+    /**
+     * @return array<int>
+     */
+    public function accessibleTeacherIds(User $user): array
+    {
+        if (Role::hasGlobalAccess($user->role)) {
+            return Teacher::query()
+                ->where('is_active', true)
+                ->pluck('id')
+                ->map(fn ($id): int => (int) $id)
+                ->all();
+        }
+
+        if ($user->role === Role::TEACHER) {
+            $teacher = $this->teacherFor($user);
+
+            return $teacher ? [(int) $teacher->id] : [];
+        }
+
+        return [];
+    }
+
     public function canManageMasterData(User $user): bool
     {
         return in_array($user->role, [Role::SUPER_ADMIN, Role::ADMIN], true);
@@ -105,6 +137,17 @@ class AccessScopeService
         return in_array((int) $report->student_id, $this->accessibleStudentIds($user), true);
     }
 
+    public function canViewStudent(User $user, Student $student): bool
+    {
+        if (Role::hasGlobalAccess($user->role)) {
+            return true;
+        }
+
+        return $this->accessibleStudentsQuery($user)
+            ->whereKey($student->id)
+            ->exists();
+    }
+
     public function teacherFor(User $user): ?Teacher
     {
         if ($user->role !== Role::TEACHER) {
@@ -120,14 +163,20 @@ class AccessScopeService
     public function studentIdsScheduledWithTeacher(int $teacherId): array
     {
         return Student::query()
-            ->where(function (Builder $query) use ($teacherId): void {
-                $query
-                    ->whereHas('weeklySchedules', fn (Builder $scheduleQuery) => $scheduleQuery->where('teacher_id', $teacherId))
-                    ->orWhereHas('classSessions', fn (Builder $sessionQuery) => $sessionQuery->where('teacher_id', $teacherId));
-            })
+            ->where(fn (Builder $query) => $this->scopeStudentsForTeacher($query, $teacherId))
             ->pluck('id')
             ->map(fn ($id): int => (int) $id)
             ->all();
+    }
+
+    public function scopeStudentsForTeacher(Builder $query, int $teacherId): Builder
+    {
+        return $query->where(function (Builder $teacherQuery) use ($teacherId): void {
+            $teacherQuery
+                ->whereHas('weeklySchedules', fn (Builder $scheduleQuery) => $scheduleQuery->where('teacher_id', $teacherId))
+                ->orWhereHas('classSessions', fn (Builder $sessionQuery) => $sessionQuery->where('teacher_id', $teacherId))
+                ->orWhereHas('observations', fn (Builder $observationQuery) => $observationQuery->where('teacher_id', $teacherId));
+        });
     }
 
     public function hasGlobalDataAccess(User $user): bool

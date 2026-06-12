@@ -743,7 +743,46 @@
             ];
             $areaCount = $groupedIndicators->count();
             $selectedStudent = $students->firstWhere('id', (int) old('student_id')) ?? $students->first();
+            $observationsByStudent = $observations->groupBy('student_id');
         @endphp
+
+        <section class="panel observation-panel">
+            <div class="line-head">
+                <div>
+                    <h3>Daftar Siswa untuk Observasi</h3>
+                    <div class="meta">Pilih anak dari daftar ini untuk membaca konteks terakhir. Observasi tetap bisa spontan dan tidak bergantung pada presensi.</div>
+                </div>
+            </div>
+            <div class="grid three" style="margin-top: 14px">
+                @forelse ($students as $student)
+                    @php
+                        $studentObservations = $observationsByStudent->get($student->id, collect());
+                        $latestObservation = $studentObservations->first();
+                        $needsFollowUp = $studentObservations->where('needs_follow_up', true)->count();
+                    @endphp
+                    <article class="line-card soft">
+                        <div class="line-head">
+                            <div>
+                                <strong>{{ $student->name }}</strong>
+                                <div class="meta">{{ $student->code }} | {{ $student->schoolClass?->name ?? '-' }}</div>
+                            </div>
+                            <span class="status {{ $latestObservation?->level_badge_class ?? 'status-not-observed' }}">
+                                {{ $latestObservation?->level_label ?? 'Belum diamati' }}
+                            </span>
+                        </div>
+                        <div class="mini-stats" style="margin-top: 12px">
+                            <span>{{ $studentObservations->count() }} observasi</span>
+                            <span>{{ $needsFollowUp }} tindak lanjut</span>
+                        </div>
+                        <p class="meta" style="margin-top: 10px">
+                            {{ $latestObservation?->note ? str($latestObservation->note)->limit(120) : 'Belum ada catatan terakhir pada periode ini.' }}
+                        </p>
+                    </article>
+                @empty
+                    <div class="empty-state">Belum ada siswa yang bisa diobservasi.</div>
+                @endforelse
+            </div>
+        </section>
 
         @if ($canWriteProcess)
             <section class="panel observation-panel" id="observasi-spontan">

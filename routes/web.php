@@ -91,11 +91,22 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/observations', [ProcessController::class, 'storeObservation'])->name('alpha.observations.store');
         Route::patch('/process/ilp/{ilpPlan}', [ProcessController::class, 'updateIlp'])->name('alpha.process.ilp.update');
         Route::post('/reports/generate', [ReportController::class, 'generate'])->name('alpha.reports.generate');
+        Route::post('/reports/students/{student}/draft', [ReportController::class, 'buildStudentDraft'])->name('alpha.reports.students.draft');
     });
 
     Route::middleware('role:super_admin,admin,teacher,principal,parent')->group(function (): void {
         Route::get('/reports', [ReportController::class, 'index'])->name('alpha.reports');
+        Route::get('/reports/students/{student}', [ReportController::class, 'student'])->name('alpha.reports.student');
+        Route::get('/reports/{report}/print', [ReportController::class, 'print'])->name('alpha.reports.print');
         Route::get('/reports/{report}', [ReportController::class, 'show'])->name('alpha.reports.show');
+    });
+
+    Route::middleware('role:super_admin,admin,teacher,principal')->group(function (): void {
+        Route::patch('/reports/students/{student}', [ReportController::class, 'saveStudentReport'])->name('alpha.reports.students.update');
+    });
+
+    Route::middleware('role:super_admin,admin')->group(function (): void {
+        Route::patch('/reports/{report}/publish', [ReportController::class, 'publish'])->name('alpha.reports.publish');
     });
 
     Route::middleware('role:super_admin')->group(function (): void {
