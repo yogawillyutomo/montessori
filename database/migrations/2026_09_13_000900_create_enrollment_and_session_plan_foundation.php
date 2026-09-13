@@ -28,7 +28,7 @@ return new class extends Migration
 
         Schema::create('child_enrollments', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('student_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('student_id')->constrained()->restrictOnDelete();
             $table->foreignId('class_level_id')->constrained()->restrictOnDelete();
             $table->foreignId('previous_enrollment_id')->nullable()->constrained('child_enrollments')->nullOnDelete();
             $table->date('starts_on');
