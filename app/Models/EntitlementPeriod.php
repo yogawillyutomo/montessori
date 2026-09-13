@@ -22,6 +22,9 @@ use LogicException;
     'confirmed_by',
     'confirmed_at',
     'status',
+    'cancellation_reason',
+    'cancelled_by',
+    'cancelled_at',
     'created_by',
 ])]
 class EntitlementPeriod extends Model
@@ -78,10 +81,15 @@ class EntitlementPeriod extends Model
             }
 
             if ((int) $assignment->child_enrollment_id !== (int) $enrollment->id
-                || (int) $assignment->session_plan_id !== (int) $plan->id
-                || $assignment->cancelled_at !== null) {
+                || (int) $assignment->session_plan_id !== (int) $plan->id) {
                 throw ValidationException::withMessages([
-                    'enrollment_plan_assignment_id' => 'Plan assignment entitlement period tidak konsisten atau sudah dibatalkan.',
+                    'enrollment_plan_assignment_id' => 'Plan assignment entitlement period tidak konsisten.',
+                ]);
+            }
+
+            if ($period->status !== 'cancelled' && $assignment->cancelled_at !== null) {
+                throw ValidationException::withMessages([
+                    'enrollment_plan_assignment_id' => 'Entitlement period aktif tidak boleh menunjuk plan assignment yang sudah dibatalkan.',
                 ]);
             }
 
@@ -116,11 +124,38 @@ class EntitlementPeriod extends Model
                     'confirmation_reason' => 'Entitlement quantity override harus memiliki actor, waktu, dan alasan konfirmasi.',
                 ]);
             }
+
+            if ($period->status === 'cancelled') {
+                if ($period->cancelled_by === null
+                    || $period->cancelled_at === null
+                    || trim((string) $period->cancellation_reason) === '') {
+                    throw ValidationException::withMessages([
+                        'cancellation_reason' => 'Entitlement period cancelled harus memiliki actor, waktu, dan alasan.',
+                    ]);
+                }
+
+                if ($period->exists && $period->committedCreditCount() > 0) {
+                    throw ValidationException::withMessages([
+                        'status' => 'Entitlement period dengan credit BOOKED/USED/FORFEITED tidak boleh dibatalkan sebelum rekonsiliasi.',
+                    ]);
+                }
+            } else {
+                $period->cancellation_reason = null;
+                $period->cancelled_by = null;
+                $period->cancelled_at = null;
+            }
         });
 
         static::updating(function (EntitlementPeriod $period): void {
+            $originalStatus = (string) $period->getOriginal('status');
+            if (in_array($originalStatus, ['closed', 'cancelled'], true)
+                && $period->isDirty('status')) {
+                throw new LogicException('Entitlement period CLOSED/CANCELLED adalah state final dan tidak boleh dibuka kembali.');
+            }
+
             $dirty = array_keys($period->getDirty());
-            $forbidden = array_diff($dirty, ['status']);
+            $allowed = ['status', 'cancellation_reason', 'cancelled_by', 'cancelled_at'];
+            $forbidden = array_diff($dirty, $allowed);
 
             if ($forbidden !== []) {
                 throw new LogicException('Entitlement period adalah snapshot historis; quantity, plan, dan periodenya tidak boleh ditulis ulang. Gunakan adjustment ledger.');
@@ -139,6 +174,7 @@ class EntitlementPeriod extends Model
             'period_end' => 'date',
             'base_quantity' => 'integer',
             'confirmed_at' => 'datetime',
+            'cancelled_at' => 'datetime',
         ];
     }
 
@@ -160,6 +196,11 @@ class EntitlementPeriod extends Model
     public function confirmedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'confirmed_by');
+    }
+
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
     }
 
     public function createdBy(): BelongsTo
