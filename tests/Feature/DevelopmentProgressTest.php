@@ -12,6 +12,7 @@ use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class DevelopmentProgressTest extends TestCase
@@ -66,6 +67,43 @@ class DevelopmentProgressTest extends TestCase
         $this->assertSame('developing', $history[1]->progress_state);
         $this->assertSame($activity->id, $history[0]->montessori_activity_id);
         $this->assertSame($activity->id, $history[1]->montessori_activity_id);
+    }
+
+    public function test_existing_progress_history_cannot_be_updated_or_deleted(): void
+    {
+        [$user, $teacher, $student, $indicator] = $this->teacherScenario('IMMUTABLE');
+
+        $this->actingAs($user)->post(route('alpha.development-progress.store'), [
+            'student_id' => $student->id,
+            'teacher_id' => $teacher->id,
+            'indicator_id' => $indicator->id,
+            'progress_state' => 'developing',
+        ])->assertRedirect();
+
+        $progress = DevelopmentProgress::query()->sole();
+
+        try {
+            $progress->update(['progress_state' => 'mastered']);
+            $this->fail('Existing progress history should reject updates.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('development_progress', $exception->errors());
+        }
+
+        $progress->refresh();
+        $this->assertSame('developing', $progress->progress_state);
+
+        try {
+            $progress->delete();
+            $this->fail('Existing progress history should reject deletion.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('development_progress', $exception->errors());
+        }
+
+        $this->assertDatabaseCount('development_progress', 1);
+        $this->assertDatabaseHas('development_progress', [
+            'id' => $progress->id,
+            'progress_state' => 'developing',
+        ]);
     }
 
     public function test_teacher_cannot_record_progress_for_out_of_scope_child(): void
@@ -162,7 +200,7 @@ class DevelopmentProgressTest extends TestCase
 
     public function test_presentation_does_not_automatically_create_development_progress(): void
     {
-        [$user, $teacher, $student, , $activity] = $this->teacherScenario('NO-AUTO');
+        [$user, $teacher, $student, , $activity] = $this->teacherScenario('NO-AUTO-PRESENTATION');
 
         $this->actingAs($user)->post(route('alpha.presentations.store'), [
             'student_id' => $student->id,
@@ -173,6 +211,26 @@ class DevelopmentProgressTest extends TestCase
         ])->assertRedirect();
 
         $this->assertDatabaseCount('presentations', 1);
+        $this->assertDatabaseCount('development_progress', 0);
+    }
+
+    public function test_observation_does_not_automatically_create_development_progress(): void
+    {
+        [$user, $teacher, $student, $indicator] = $this->teacherScenario('NO-AUTO-OBSERVATION');
+
+        $this->actingAs($user)->post(route('alpha.observations.store'), [
+            'student_id' => $student->id,
+            'teacher_id' => $teacher->id,
+            'development_area_id' => $indicator->development_area_id,
+            'indicator_id' => $indicator->id,
+            'observed_on' => now()->toDateString(),
+            'level' => 'developing',
+            'note' => 'Objective observation evidence only; not a progress judgement.',
+            'needs_follow_up' => false,
+            'include_in_report' => false,
+        ])->assertRedirect();
+
+        $this->assertDatabaseCount('observations', 1);
         $this->assertDatabaseCount('development_progress', 0);
     }
 
