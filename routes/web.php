@@ -6,6 +6,7 @@ use App\Http\Controllers\Alpha\DashboardController;
 use App\Http\Controllers\Alpha\DevelopmentProgressController;
 use App\Http\Controllers\Alpha\FollowUpCandidateController;
 use App\Http\Controllers\Alpha\MasterController;
+use App\Http\Controllers\Alpha\ObservationController;
 use App\Http\Controllers\Alpha\PresentationController;
 use App\Http\Controllers\Alpha\ProcessController;
 use App\Http\Controllers\Alpha\ReportController;
@@ -99,7 +100,7 @@ Route::middleware('auth')->group(function (): void {
         Route::delete('/process/sessions/{classSession}', [ProcessController::class, 'destroySession'])->name('alpha.process.sessions.destroy');
         Route::post('/presentations', [PresentationController::class, 'store'])->name('alpha.presentations.store');
         Route::post('/development-progress', [DevelopmentProgressController::class, 'store'])->name('alpha.development-progress.store');
-        Route::post('/observations', [ProcessController::class, 'storeObservation'])->name('alpha.observations.store');
+        Route::post('/observations', [ObservationController::class, 'store'])->name('alpha.observations.store');
         Route::post('/follow-up-candidates/{followUpCandidate}/confirm', [FollowUpCandidateController::class, 'confirm'])->name('alpha.follow-up-candidates.confirm');
         Route::post('/follow-up-candidates/{followUpCandidate}/dismiss', [FollowUpCandidateController::class, 'dismiss'])->name('alpha.follow-up-candidates.dismiss');
         Route::patch('/process/ilp/{ilpPlan}', [ProcessController::class, 'updateIlp'])->name('alpha.process.ilp.update');
