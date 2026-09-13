@@ -49,9 +49,9 @@ class EntitlementAdjustmentService
                     ->whereNull('voided_at')
                     ->where('status', 'available')
                     ->lockForUpdate()
-                    ->count();
+                    ->get();
 
-                if ($available < $required) {
+                if ($available->count() < $required) {
                     throw ValidationException::withMessages([
                         'quantity_delta' => 'Adjustment negatif tidak boleh mengurangi credit yang sudah BOOKED/USED/FORFEITED. Credit AVAILABLE tidak mencukupi.',
                     ]);
