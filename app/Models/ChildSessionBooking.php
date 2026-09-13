@@ -14,6 +14,7 @@ use LogicException;
 
 #[Fillable([
     'student_id',
+    'child_enrollment_id',
     'session_occurrence_id',
     'booking_type',
     'status',
@@ -54,6 +55,17 @@ class ChildSessionBooking extends Model
                 ]);
             }
 
+            $enrollment = null;
+            if ($booking->child_enrollment_id !== null) {
+                $enrollment = ChildEnrollment::query()->find($booking->child_enrollment_id);
+
+                if (! $enrollment || (int) $enrollment->student_id !== (int) $booking->student_id) {
+                    throw ValidationException::withMessages([
+                        'child_enrollment_id' => 'Booking harus memakai enrollment milik anak yang sama.',
+                    ]);
+                }
+            }
+
             if (! in_array($booking->status, self::ACTIVE_STATUSES, true)) {
                 $booking->active_on = null;
 
@@ -78,6 +90,26 @@ class ChildSessionBooking extends Model
             }
 
             $booking->active_on = $occurrence->occurs_on->toDateString();
+
+            if ($enrollment) {
+                if (! $enrollment->coversDate($booking->active_on)) {
+                    throw ValidationException::withMessages([
+                        'child_enrollment_id' => 'Tanggal booking berada di luar periode enrollment anak.',
+                    ]);
+                }
+
+                if (! $booking->exists && $enrollment->status === 'ended') {
+                    throw ValidationException::withMessages([
+                        'child_enrollment_id' => 'Booking baru tidak boleh dibuat pada enrollment yang sudah ended.',
+                    ]);
+                }
+
+                if ($enrollment->isSuspendedOn($booking->active_on)) {
+                    throw ValidationException::withMessages([
+                        'child_enrollment_id' => 'Booking tidak boleh dibuat pada periode enrollment yang sedang suspended.',
+                    ]);
+                }
+            }
 
             $duplicate = self::query()
                 ->active()
@@ -155,6 +187,11 @@ class ChildSessionBooking extends Model
     public function student(): BelongsTo
     {
         return $this->belongsTo(Student::class);
+    }
+
+    public function childEnrollment(): BelongsTo
+    {
+        return $this->belongsTo(ChildEnrollment::class);
     }
 
     public function sessionOccurrence(): BelongsTo
