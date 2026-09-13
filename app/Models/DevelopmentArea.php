@@ -16,4 +16,9 @@ class DevelopmentArea extends Model
     {
         return $this->hasMany(Indicator::class);
     }
+
+    public function montessoriActivities(): HasMany
+    {
+        return $this->hasMany(MontessoriActivity::class);
+    }
 }
