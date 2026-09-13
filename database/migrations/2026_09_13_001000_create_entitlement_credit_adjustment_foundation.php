@@ -40,7 +40,7 @@ return new class extends Migration
             $table->timestamp('created_at')->useCurrent();
 
             $table->index(['entitlement_period_id', 'created_at']);
-            $table->index('reversal_of_adjustment_id');
+            $table->unique('reversal_of_adjustment_id');
         });
 
         Schema::create('session_credits', function (Blueprint $table): void {
