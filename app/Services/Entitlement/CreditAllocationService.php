@@ -67,7 +67,7 @@ class CreditAllocationService
                 ->where('session_credit_id', $lockedCredit->id)
                 ->whereKeyNot($lockedBooking->id)
                 ->lockForUpdate()
-                ->exists();
+                ->first();
 
             if ($duplicateActive) {
                 throw ValidationException::withMessages([
