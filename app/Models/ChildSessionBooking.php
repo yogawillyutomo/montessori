@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Validation\ValidationException;
 
 #[Fillable([
     'student_id',
@@ -44,8 +45,47 @@ class ChildSessionBooking extends Model
                 return;
             }
 
-            $occurrence = $booking->sessionOccurrence()->first();
-            $booking->active_on = $occurrence?->occurs_on?->toDateString();
+            $occurrence = SessionOccurrence::query()->find($booking->session_occurrence_id);
+            if (! $occurrence) {
+                throw ValidationException::withMessages([
+                    'session_occurrence_id' => 'Session occurrence untuk booking tidak ditemukan.',
+                ]);
+            }
+
+            if ($occurrence->status === 'cancelled') {
+                throw ValidationException::withMessages([
+                    'session_occurrence_id' => 'Anak tidak dapat dibooking ke session occurrence yang dibatalkan.',
+                ]);
+            }
+
+            $booking->active_on = $occurrence->occurs_on->toDateString();
+
+            $duplicate = self::query()
+                ->active()
+                ->where('student_id', $booking->student_id)
+                ->whereDate('active_on', $booking->active_on)
+                ->when($booking->exists, fn (Builder $query) => $query->whereKeyNot($booking->getKey()))
+                ->exists();
+
+            if ($duplicate) {
+                throw ValidationException::withMessages([
+                    'student_id' => 'Anak sudah memiliki booking aktif lain pada tanggal yang sama.',
+                ]);
+            }
+
+            if ($occurrence->capacity !== null) {
+                $activeCount = self::query()
+                    ->active()
+                    ->where('session_occurrence_id', $occurrence->id)
+                    ->when($booking->exists, fn (Builder $query) => $query->whereKeyNot($booking->getKey()))
+                    ->count();
+
+                if ($activeCount >= $occurrence->capacity) {
+                    throw ValidationException::withMessages([
+                        'session_occurrence_id' => "Kapasitas session occurrence sudah penuh ({$occurrence->capacity} anak).",
+                    ]);
+                }
+            }
         });
     }
 
