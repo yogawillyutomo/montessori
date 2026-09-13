@@ -294,7 +294,19 @@ class AttendanceCreditMakeupTest extends TestCase
             $this->seed();
         }
 
-        $student = Student::query()->firstOrFail();
+        $student = Student::query()->whereDoesntHave('childEnrollments')->first();
+
+        if (! $student) {
+            $template = Student::query()->firstOrFail();
+            $student = Student::query()->create([
+                'school_class_id' => $template->school_class_id,
+                'guardian_id' => $template->guardian_id,
+                'code' => 'M8-STUDENT-'.$code,
+                'name' => 'M8 '.$code,
+                'status' => 'active',
+            ]);
+        }
+
         $admin = User::query()->where('role', 'admin')->firstOrFail();
         $level = ClassLevel::query()->create([
             'name' => $code,
