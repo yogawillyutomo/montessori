@@ -7,8 +7,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Validation\ValidationException;
+use LogicException;
 
-#[Fillable(['class_session_id', 'student_id', 'status', 'note', 'marked_by', 'marked_at'])]
+#[Fillable(['class_session_id', 'student_id', 'child_session_booking_id', 'status', 'note', 'marked_by', 'marked_at'])]
 class Attendance extends Model
 {
     use HasFactory;
@@ -30,6 +32,24 @@ class Attendance extends Model
     protected static function booted(): void
     {
         static::saving(function (Attendance $attendance): void {
+            if ($attendance->child_session_booking_id !== null) {
+                $booking = ChildSessionBooking::query()->find($attendance->child_session_booking_id);
+
+                if (! $booking || (int) $booking->student_id !== (int) $attendance->student_id) {
+                    throw ValidationException::withMessages([
+                        'child_session_booking_id' => 'Attendance harus menunjuk booking milik anak yang sama.',
+                    ]);
+                }
+
+                if ($booking->legacy_class_session_id !== null
+                    && $attendance->class_session_id !== null
+                    && (int) $booking->legacy_class_session_id !== (int) $attendance->class_session_id) {
+                    throw ValidationException::withMessages([
+                        'child_session_booking_id' => 'Attendance legacy dan booking harus menunjuk class session yang sama.',
+                    ]);
+                }
+            }
+
             if ($attendance->marked_at === null) {
                 $attendance->status = 'unmarked';
                 $attendance->marked_by = null;
@@ -37,6 +57,11 @@ class Attendance extends Model
         });
 
         static::updating(function (Attendance $attendance): void {
+            if ($attendance->getOriginal('child_session_booking_id') !== null
+                && $attendance->isDirty('child_session_booking_id')) {
+                throw new LogicException('Attendance yang sudah terhubung ke booking tidak boleh dipindahkan ke booking lain.');
+            }
+
             $attendance->auditBefore = [
                 'status' => $attendance->getRawOriginal('status'),
                 'note' => $attendance->getRawOriginal('note'),
@@ -88,6 +113,11 @@ class Attendance extends Model
     public function student(): BelongsTo
     {
         return $this->belongsTo(Student::class);
+    }
+
+    public function childSessionBooking(): BelongsTo
+    {
+        return $this->belongsTo(ChildSessionBooking::class);
     }
 
     public function markedBy(): BelongsTo
