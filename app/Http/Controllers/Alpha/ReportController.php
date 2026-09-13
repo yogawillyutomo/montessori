@@ -177,6 +177,8 @@ class ReportController extends Controller
         $student->loadMissing(['guardian', 'schoolClass.classLevel']);
         $report?->loadMissing(['student.guardian', 'student.schoolClass.classLevel', 'term.academicYear', 'homeroomTeacher']);
 
+        $isPublished = $report?->status === 'published';
+
         return view('alpha.report-student', [
             ...$this->shell($request, 'reports'),
             'student' => $student,
@@ -194,9 +196,9 @@ class ReportController extends Controller
                 'absent' => 0,
                 'attendance_rate' => 0,
             ],
-            'canBuildDraft' => $scope->canGenerateReport($user),
-            'canEditReport' => $user->role !== Role::PARENT,
-            'canPublishReport' => in_array($user->role, [Role::SUPER_ADMIN, Role::ADMIN], true) && $report !== null,
+            'canBuildDraft' => $scope->canGenerateReport($user) && ! $isPublished,
+            'canEditReport' => $user->role !== Role::PARENT && ! $isPublished,
+            'canPublishReport' => in_array($user->role, [Role::SUPER_ADMIN, Role::ADMIN], true) && $report !== null && ! $isPublished,
             'isParentView' => $user->role === Role::PARENT,
         ]);
     }
