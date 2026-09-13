@@ -5,6 +5,8 @@ namespace App\Services\Enrollment;
 use App\Models\ChildEnrollment;
 use App\Models\ChildSessionBooking;
 use App\Models\ClassLevel;
+use App\Models\EnrollmentPlanAssignment;
+use App\Models\RecurringSchedule;
 use App\Models\Student;
 use App\Models\User;
 use App\Support\Alpha\Role;
@@ -67,6 +69,7 @@ class ChildEnrollmentService
             }
 
             $this->assertNoActiveBookingsAfter($locked, $endDate);
+            $this->reconcileEffectiveDatedChildren($locked, $endDate, $actor, 'Enrollment ended: '.$reason);
 
             $locked->forceFill([
                 'ends_on' => $endDate->toDateString(),
@@ -123,9 +126,16 @@ class ChildEnrollmentService
             }
 
             $this->assertNoActiveBookingsOnOrAfter($source, $transferDate);
+            $sourceEnd = $transferDate->subDay();
+            $this->reconcileEffectiveDatedChildren(
+                $source,
+                $sourceEnd,
+                $actor,
+                'Program transfer: '.$reason,
+            );
 
             $source->forceFill([
-                'ends_on' => $transferDate->subDay()->toDateString(),
+                'ends_on' => $sourceEnd->toDateString(),
                 'status' => 'ended',
                 'ended_reason' => 'Program transfer: '.$reason,
             ])->save();
@@ -159,7 +169,7 @@ class ChildEnrollmentService
             ]);
         }
 
-        return DB::transaction(function () use ($enrollment, $from, $until, $actor, $reason): ChildEnrollment {
+        return DB::transaction(function () use ($enrollment, $from, $until, $reason): ChildEnrollment {
             $locked = ChildEnrollment::query()->whereKey($enrollment->id)->lockForUpdate()->firstOrFail();
 
             if ($locked->status === 'ended') {
@@ -247,6 +257,53 @@ class ChildEnrollmentService
 
             return $locked->fresh();
         });
+    }
+
+    private function reconcileEffectiveDatedChildren(
+        ChildEnrollment $enrollment,
+        CarbonImmutable $endDate,
+        User $actor,
+        string $reason,
+    ): void {
+        $assignments = EnrollmentPlanAssignment::query()
+            ->where('child_enrollment_id', $enrollment->id)
+            ->whereNull('cancelled_at')
+            ->orderBy('valid_from')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($assignments as $assignment) {
+            if ($assignment->valid_from->gt($endDate)) {
+                $assignment->forceFill([
+                    'cancelled_at' => now(),
+                    'cancelled_by' => $actor->id,
+                    'cancellation_reason' => $reason,
+                ])->save();
+
+                continue;
+            }
+
+            if ($assignment->valid_until === null || $assignment->valid_until->gt($endDate)) {
+                $assignment->update(['valid_until' => $endDate->toDateString()]);
+            }
+        }
+
+        RecurringSchedule::query()
+            ->where('child_enrollment_id', $enrollment->id)
+            ->where(function ($query) use ($endDate): void {
+                $query->whereNull('valid_until')
+                    ->orWhereDate('valid_until', '>', $endDate->toDateString());
+            })
+            ->get()
+            ->each(function (RecurringSchedule $schedule) use ($endDate): void {
+                if ($schedule->valid_from !== null && $schedule->valid_from->gt($endDate)) {
+                    $schedule->update(['is_active' => false]);
+
+                    return;
+                }
+
+                $schedule->update(['valid_until' => $endDate->toDateString()]);
+            });
     }
 
     private function assertNoActiveBookingsAfter(ChildEnrollment $enrollment, CarbonImmutable $endDate): void
