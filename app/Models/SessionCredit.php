@@ -39,6 +39,16 @@ class SessionCredit extends Model
     protected static function booted(): void
     {
         static::saving(function (SessionCredit $credit): void {
+            if ($credit->exists) {
+                $dirty = array_keys($credit->getDirty());
+                $allowed = ['status', 'voided_at', 'voided_by_adjustment_id'];
+                $forbidden = array_diff($dirty, $allowed);
+
+                if ($forbidden !== []) {
+                    throw new LogicException('Identitas dan origin session credit bersifat immutable.');
+                }
+            }
+
             if (! in_array($credit->status, self::STATUSES, true)) {
                 throw ValidationException::withMessages([
                     'status' => 'Status session credit tidak valid.',
@@ -108,16 +118,6 @@ class SessionCredit extends Model
                 throw ValidationException::withMessages([
                     'voided_by_adjustment_id' => 'Credit aktif tidak boleh menyimpan voiding adjustment.',
                 ]);
-            }
-        });
-
-        static::updating(function (SessionCredit $credit): void {
-            $dirty = array_keys($credit->getDirty());
-            $allowed = ['status', 'voided_at', 'voided_by_adjustment_id'];
-            $forbidden = array_diff($dirty, $allowed);
-
-            if ($forbidden !== []) {
-                throw new LogicException('Identitas dan origin session credit bersifat immutable.');
             }
         });
 
