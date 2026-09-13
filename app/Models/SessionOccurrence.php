@@ -21,6 +21,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'completed_at',
     'completed_by',
     'cancellation_reason',
+    'cancelled_by',
+    'cancelled_at',
     'legacy_class_session_id',
     'legacy_weekly_schedule_id',
     'legacy_school_class_id',
@@ -48,6 +50,7 @@ class SessionOccurrence extends Model
             'capacity' => 'integer',
             'opened_at' => 'datetime',
             'completed_at' => 'datetime',
+            'cancelled_at' => 'datetime',
             'legacy_deleted_at' => 'datetime',
         ];
     }
@@ -65,6 +68,11 @@ class SessionOccurrence extends Model
     public function completedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'completed_by');
+    }
+
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
     }
 
     public function legacyClassSession(): BelongsTo

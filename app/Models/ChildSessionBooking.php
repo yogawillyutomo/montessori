@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Support\Alpha\Role;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Validation\ValidationException;
+use LogicException;
 
 #[Fillable([
     'student_id',
@@ -16,6 +19,12 @@ use Illuminate\Validation\ValidationException;
     'status',
     'active_on',
     'source_type',
+    'cancellation_reason',
+    'cancelled_by',
+    'cancelled_at',
+    'capacity_override',
+    'capacity_override_by',
+    'capacity_override_reason',
     'created_by',
     'legacy_class_session_student_id',
     'legacy_class_session_id',
@@ -39,11 +48,21 @@ class ChildSessionBooking extends Model
     protected static function booted(): void
     {
         static::saving(function (ChildSessionBooking $booking): void {
+            if (! in_array($booking->status, self::STATUSES, true)) {
+                throw ValidationException::withMessages([
+                    'status' => 'Status booking tidak valid.',
+                ]);
+            }
+
             if (! in_array($booking->status, self::ACTIVE_STATUSES, true)) {
                 $booking->active_on = null;
 
                 return;
             }
+
+            $booking->cancellation_reason = null;
+            $booking->cancelled_by = null;
+            $booking->cancelled_at = null;
 
             $occurrence = SessionOccurrence::query()->find($booking->session_occurrence_id);
             if (! $occurrence) {
@@ -73,7 +92,28 @@ class ChildSessionBooking extends Model
                 ]);
             }
 
-            if ($occurrence->capacity !== null) {
+            if ($booking->capacity_override) {
+                $overrideActor = User::query()->find($booking->capacity_override_by);
+                $authorized = $overrideActor
+                    && in_array($overrideActor->role, [Role::SUPER_ADMIN, Role::ADMIN], true);
+
+                if (! $authorized) {
+                    throw ValidationException::withMessages([
+                        'capacity_override' => 'Capacity override hanya boleh dilakukan oleh super admin atau admin.',
+                    ]);
+                }
+
+                if (trim((string) $booking->capacity_override_reason) === '') {
+                    throw ValidationException::withMessages([
+                        'capacity_override_reason' => 'Alasan capacity override wajib dicatat.',
+                    ]);
+                }
+            } else {
+                $booking->capacity_override_by = null;
+                $booking->capacity_override_reason = null;
+            }
+
+            if (! $booking->capacity_override && $occurrence->capacity !== null) {
                 $activeCount = self::query()
                     ->active()
                     ->where('session_occurrence_id', $occurrence->id)
@@ -87,12 +127,20 @@ class ChildSessionBooking extends Model
                 }
             }
         });
+
+        static::deleting(function (ChildSessionBooking $booking): void {
+            if ($booking->incomingMovement()->exists() || $booking->outgoingMovement()->exists()) {
+                throw new LogicException('Booking yang menjadi bagian movement chain tidak boleh dihapus.');
+            }
+        });
     }
 
     protected function casts(): array
     {
         return [
             'active_on' => 'date',
+            'cancelled_at' => 'datetime',
+            'capacity_override' => 'boolean',
             'legacy_deleted_at' => 'datetime',
         ];
     }
@@ -117,5 +165,25 @@ class ChildSessionBooking extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
+    public function capacityOverrideBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'capacity_override_by');
+    }
+
+    public function outgoingMovement(): HasOne
+    {
+        return $this->hasOne(BookingMovement::class, 'source_booking_id');
+    }
+
+    public function incomingMovement(): HasOne
+    {
+        return $this->hasOne(BookingMovement::class, 'destination_booking_id');
     }
 }
