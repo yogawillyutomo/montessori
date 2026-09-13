@@ -163,7 +163,8 @@ class AccessScopeService
                 // Legacy compatibility while schedule/session domains are migrated.
                 ->whereHas('weeklySchedules', fn (Builder $scheduleQuery) => $scheduleQuery->where('teacher_id', $teacherId))
                 ->orWhereHas('classSessions', fn (Builder $sessionQuery) => $sessionQuery->where('teacher_id', $teacherId))
-                // Intentional Montessori environment context.
+                // Intentional Montessori environment context. Only guide roles grant
+                // broad child scope; assistants/specialists require contextual access.
                 ->orWhereHas('environmentMemberships', function (Builder $membershipQuery) use ($teacherId, $today): void {
                     $membershipQuery
                         ->where('status', 'active')
@@ -177,6 +178,7 @@ class AccessScopeService
                                 ->whereHas('guideAssignments', function (Builder $assignmentQuery) use ($teacherId, $today): void {
                                     $assignmentQuery
                                         ->where('teacher_id', $teacherId)
+                                        ->whereIn('assignment_role', ['lead_guide', 'guide'])
                                         ->where('is_active', true)
                                         ->whereDate('valid_from', '<=', $today)
                                         ->where(function (Builder $periodQuery) use ($today): void {
