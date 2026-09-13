@@ -3,9 +3,11 @@
 namespace App\Http\Middleware;
 
 use Closure;
+use Illuminate\Database\ConnectionInterface;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 class AtomicSchedulingMutation
 {
@@ -30,6 +32,45 @@ class AtomicSchedulingMutation
             return $next($request);
         }
 
-        return DB::transaction(fn (): Response => $next($request));
+        $connection = DB::connection();
+        $startingLevel = $connection->transactionLevel();
+        $connection->beginTransaction();
+
+        try {
+            $response = $next($request);
+
+            if ($this->hasNewValidationErrors($request)) {
+                $this->rollbackToLevel($connection, $startingLevel);
+
+                return $response;
+            }
+
+            $connection->commit();
+
+            return $response;
+        } catch (Throwable $exception) {
+            $this->rollbackToLevel($connection, $startingLevel);
+
+            throw $exception;
+        }
+    }
+
+    private function hasNewValidationErrors(Request $request): bool
+    {
+        if (! $request->hasSession()) {
+            return false;
+        }
+
+        $newFlashKeys = (array) $request->session()->get('_flash.new', []);
+
+        return in_array('errors', $newFlashKeys, true)
+            && $request->session()->has('errors');
+    }
+
+    private function rollbackToLevel(ConnectionInterface $connection, int $startingLevel): void
+    {
+        while ($connection->transactionLevel() > $startingLevel) {
+            $connection->rollBack();
+        }
     }
 }
