@@ -22,7 +22,7 @@ class EnrollmentPlanService
     ): EnrollmentPlanAssignment {
         $this->authorize($actor);
 
-        if ($enrollment->planAssignments()->exists()) {
+        if ($enrollment->planAssignments()->whereNull('cancelled_at')->exists()) {
             throw ValidationException::withMessages([
                 'child_enrollment_id' => 'Enrollment sudah memiliki plan assignment. Gunakan plan change untuk perubahan berikutnya.',
             ]);
@@ -79,6 +79,7 @@ class EnrollmentPlanService
                 ->firstOrFail();
             $tail = EnrollmentPlanAssignment::query()
                 ->where('child_enrollment_id', $lockedEnrollment->id)
+                ->whereNull('cancelled_at')
                 ->orderByDesc('valid_from')
                 ->lockForUpdate()
                 ->first();
@@ -95,9 +96,23 @@ class EnrollmentPlanService
                 ]);
             }
 
-            $effectiveDate = $effectiveFrom
-                ? CarbonImmutable::parse($effectiveFrom)->startOfDay()
-                : CarbonImmutable::now()->startOfMonth()->addMonth();
+            $currentPlan = SessionPlan::query()->findOrFail($tail->session_plan_id);
+
+            if ($effectiveFrom === null
+                && ($currentPlan->entitlement_period !== 'monthly' || $newPlan->entitlement_period !== 'monthly')) {
+                throw ValidationException::withMessages([
+                    'valid_from' => 'Plan non-monthly memerlukan tanggal efektif eksplisit.',
+                ]);
+            }
+
+            if ($effectiveFrom) {
+                $effectiveDate = CarbonImmutable::parse($effectiveFrom)->startOfDay();
+            } else {
+                $now = CarbonImmutable::now()->startOfDay();
+                $tailStart = CarbonImmutable::parse($tail->valid_from)->startOfDay();
+                $base = $now->greaterThan($tailStart) ? $now : $tailStart;
+                $effectiveDate = $base->startOfMonth()->addMonth();
+            }
 
             if ($effectiveDate->lte($tail->valid_from)) {
                 throw ValidationException::withMessages([
@@ -132,12 +147,55 @@ class EnrollmentPlanService
         });
     }
 
+    public function cancelFutureAssignment(
+        EnrollmentPlanAssignment $assignment,
+        User $actor,
+        string $reason,
+        ?string $asOf = null,
+    ): EnrollmentPlanAssignment {
+        $this->authorize($actor);
+        $reason = trim($reason);
+        $asOfDate = CarbonImmutable::parse($asOf ?: CarbonImmutable::now()->toDateString())->startOfDay();
+
+        if ($reason === '') {
+            throw ValidationException::withMessages([
+                'reason' => 'Alasan pembatalan future plan assignment wajib dicatat.',
+            ]);
+        }
+
+        return DB::transaction(function () use ($assignment, $actor, $reason, $asOfDate): EnrollmentPlanAssignment {
+            $locked = EnrollmentPlanAssignment::query()
+                ->whereKey($assignment->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($locked->cancelled_at !== null) {
+                return $locked;
+            }
+
+            if (! $locked->valid_from->gt($asOfDate)) {
+                throw ValidationException::withMessages([
+                    'assignment' => 'Hanya plan assignment yang belum mulai yang dapat dibatalkan.',
+                ]);
+            }
+
+            $locked->forceFill([
+                'cancelled_at' => now(),
+                'cancelled_by' => $actor->id,
+                'cancellation_reason' => $reason,
+            ])->save();
+
+            return $locked->fresh();
+        });
+    }
+
     public function assignmentOn(ChildEnrollment $enrollment, string $date): ?EnrollmentPlanAssignment
     {
         $on = CarbonImmutable::parse($date)->toDateString();
 
         return EnrollmentPlanAssignment::query()
             ->where('child_enrollment_id', $enrollment->id)
+            ->whereNull('cancelled_at')
             ->whereDate('valid_from', '<=', $on)
             ->where(function ($query) use ($on): void {
                 $query->whereNull('valid_until')
