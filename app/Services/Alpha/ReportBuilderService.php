@@ -8,6 +8,7 @@ use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\Term;
 use App\Models\User;
+use Illuminate\Validation\ValidationException;
 
 class ReportBuilderService
 {
@@ -23,9 +24,14 @@ class ReportBuilderService
             ->where('term_id', $term->id)
             ->first();
 
+        // Published output is immutable in the alpha hardening phase. A future report
+        // revision/version workflow may create a new draft without mutating this row.
+        if ($report?->status === 'published') {
+            return $report;
+        }
+
         $summary = $this->summaryFor($student, $term);
         $teacher = $this->homeroomTeacherFor($student, $user);
-        $status = $report?->status === 'published' ? 'published' : 'draft';
 
         return Report::query()->updateOrCreate(
             [
@@ -34,7 +40,7 @@ class ReportBuilderService
             ],
             [
                 'homeroom_teacher_id' => $teacher?->id,
-                'status' => $status,
+                'status' => 'draft',
                 'summary' => $summary,
                 'teacher_narrative' => $report?->teacher_narrative ?: $this->draftNarrative($student, $summary),
                 'general_narrative' => $report?->general_narrative,
@@ -66,6 +72,12 @@ class ReportBuilderService
             ]
         );
 
+        if ($report->status === 'published') {
+            throw ValidationException::withMessages([
+                'status' => 'Rapor yang sudah dipublish tidak dapat diedit. Gunakan workflow revisi yang terkontrol.',
+            ]);
+        }
+
         $report->fill([
             'status' => $data['status'] ?? $report->status,
             'manual_present_total' => $data['manual_present_total'] ?? 0,
@@ -86,10 +98,6 @@ class ReportBuilderService
         if ($report->status === 'ready' && ! $report->reviewed_at) {
             $report->reviewed_by = $user->id;
             $report->reviewed_at = now();
-        }
-
-        if ($report->status === 'published' && ! $report->published_at) {
-            $report->published_at = now();
         }
 
         $report->summary = $this->summaryFor($student, $term, $report);
@@ -146,6 +154,10 @@ class ReportBuilderService
 
     public function publish(Report $report, User $user): Report
     {
+        if ($report->status === 'published') {
+            return $report;
+        }
+
         $report->forceFill([
             'status' => 'published',
             'published_at' => now(),
