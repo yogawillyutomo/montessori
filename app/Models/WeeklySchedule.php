@@ -2,17 +2,30 @@
 
 namespace App\Models;
 
+use App\Services\Alpha\LegacySessionBridgeService;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable(['school_class_id', 'teacher_id', 'room', 'capacity', 'day_of_week', 'starts_at', 'ends_at', 'topic', 'is_active'])]
 class WeeklySchedule extends Model
 {
     use HasFactory;
+
+    protected static function booted(): void
+    {
+        static::saved(function (WeeklySchedule $schedule): void {
+            app(LegacySessionBridgeService::class)->syncTemplate($schedule);
+        });
+
+        static::deleted(function (WeeklySchedule $schedule): void {
+            app(LegacySessionBridgeService::class)->markTemplateLegacyDeleted($schedule);
+        });
+    }
 
     protected function casts(): array
     {
@@ -41,5 +54,10 @@ class WeeklySchedule extends Model
     public function classSessions(): HasMany
     {
         return $this->hasMany(ClassSession::class);
+    }
+
+    public function sessionTemplate(): HasOne
+    {
+        return $this->hasOne(SessionTemplate::class, 'legacy_weekly_schedule_id');
     }
 }
