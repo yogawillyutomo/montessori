@@ -4,6 +4,7 @@ use App\Http\Controllers\Alpha\AttendanceController;
 use App\Http\Controllers\Alpha\AuthController;
 use App\Http\Controllers\Alpha\DashboardController;
 use App\Http\Controllers\Alpha\MasterController;
+use App\Http\Controllers\Alpha\PresentationController;
 use App\Http\Controllers\Alpha\ProcessController;
 use App\Http\Controllers\Alpha\ReportController;
 use App\Http\Controllers\Alpha\SettingController;
@@ -94,6 +95,7 @@ Route::middleware('auth')->group(function (): void {
             ->name('alpha.process.sessions.attendance');
         Route::patch('/process/sessions/{classSession}/close', [ProcessController::class, 'closeSession'])->name('alpha.process.sessions.close');
         Route::delete('/process/sessions/{classSession}', [ProcessController::class, 'destroySession'])->name('alpha.process.sessions.destroy');
+        Route::post('/presentations', [PresentationController::class, 'store'])->name('alpha.presentations.store');
         Route::post('/observations', [ProcessController::class, 'storeObservation'])->name('alpha.observations.store');
         Route::patch('/process/ilp/{ilpPlan}', [ProcessController::class, 'updateIlp'])->name('alpha.process.ilp.update');
         Route::post('/reports/generate', [ReportController::class, 'generate'])->name('alpha.reports.generate');

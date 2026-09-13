@@ -92,6 +92,11 @@ class SessionOccurrence extends Model
             ->whereNotNull('active_on');
     }
 
+    public function presentations(): HasMany
+    {
+        return $this->hasMany(Presentation::class);
+    }
+
     public function activeBookingCount(): int
     {
         return $this->activeBookings()->count();

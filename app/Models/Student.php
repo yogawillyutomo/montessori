@@ -91,6 +91,11 @@ class Student extends Model
         return $this->hasMany(Attendance::class);
     }
 
+    public function presentations(): HasMany
+    {
+        return $this->hasMany(Presentation::class);
+    }
+
     public function observations(): HasMany
     {
         return $this->hasMany(Observation::class);

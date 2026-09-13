@@ -45,6 +45,11 @@ class Teacher extends Model
         return $this->hasMany(ChildGuideResponsibility::class);
     }
 
+    public function presentations(): HasMany
+    {
+        return $this->hasMany(Presentation::class);
+    }
+
     public function observations(): HasMany
     {
         return $this->hasMany(Observation::class);
