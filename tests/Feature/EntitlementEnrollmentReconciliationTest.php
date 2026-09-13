@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Models\ChildEnrollment;
 use App\Models\ChildSessionBooking;
 use App\Models\ClassLevel;
-use App\Models\EntitlementPeriod;
 use App\Models\SessionOccurrence;
 use App\Models\SessionPlan;
 use App\Models\Student;
