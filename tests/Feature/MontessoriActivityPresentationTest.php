@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\ChildGuideResponsibility;
 use App\Models\ChildSessionBooking;
 use App\Models\DevelopmentArea;
 use App\Models\MontessoriActivity;
@@ -10,7 +11,6 @@ use App\Models\SessionOccurrence;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\User;
-use App\Models\WeeklySchedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -205,18 +205,14 @@ class MontessoriActivityPresentationTest extends TestCase
             'is_active' => true,
         ]);
         $student = $this->student($schoolClass, $suffix);
-        $schedule = WeeklySchedule::query()->create([
-            'school_class_id' => $schoolClass->id,
+        ChildGuideResponsibility::query()->create([
+            'student_id' => $student->id,
             'teacher_id' => $teacher->id,
-            'room' => 'M9 Room',
-            'capacity' => 12,
-            'day_of_week' => 1,
-            'starts_at' => '08:00',
-            'ends_at' => '09:00',
-            'topic' => null,
+            'responsibility_type' => 'primary_guide',
+            'valid_from' => now()->subDay()->toDateString(),
+            'valid_until' => null,
             'is_active' => true,
         ]);
-        $schedule->students()->attach($student->id);
         $area = DevelopmentArea::query()->create([
             'name' => 'Practical Life '.$suffix,
             'slug' => 'practical-life-'.strtolower($suffix),
