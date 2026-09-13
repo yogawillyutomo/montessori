@@ -35,12 +35,28 @@ class Student extends Model
 
     public function weeklySchedules(): BelongsToMany
     {
-        return $this->belongsToMany(WeeklySchedule::class, 'student_weekly_schedule')->withTimestamps();
+        return $this->belongsToMany(WeeklySchedule::class, 'student_weekly_schedule')
+            ->using(StudentWeeklySchedule::class)
+            ->withPivot('id')
+            ->withTimestamps();
     }
 
     public function classSessions(): BelongsToMany
     {
-        return $this->belongsToMany(ClassSession::class, 'class_session_student')->withTimestamps();
+        return $this->belongsToMany(ClassSession::class, 'class_session_student')
+            ->using(ClassSessionStudent::class)
+            ->withPivot('id')
+            ->withTimestamps();
+    }
+
+    public function recurringSchedules(): HasMany
+    {
+        return $this->hasMany(RecurringSchedule::class);
+    }
+
+    public function sessionBookings(): HasMany
+    {
+        return $this->hasMany(ChildSessionBooking::class);
     }
 
     public function environmentMemberships(): HasMany
