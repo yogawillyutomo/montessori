@@ -82,7 +82,10 @@ class MontessoriActivityPresentationTest extends TestCase
     public function test_teacher_cannot_record_presentation_on_behalf_of_another_teacher(): void
     {
         [$user, , $student, $activity] = $this->teacherScenario('IDENTITY');
-        $otherUser = User::factory()->create(['role' => 'teacher']);
+        $otherUser = User::factory()->create([
+            'role' => 'teacher',
+            'is_active' => true,
+        ]);
         $otherTeacher = Teacher::query()->create([
             'user_id' => $otherUser->id,
             'name' => 'Other Guide',
@@ -189,7 +192,10 @@ class MontessoriActivityPresentationTest extends TestCase
      */
     private function teacherScenario(string $suffix): array
     {
-        $user = User::factory()->create(['role' => 'teacher']);
+        $user = User::factory()->create([
+            'role' => 'teacher',
+            'is_active' => true,
+        ]);
         $teacher = Teacher::query()->create([
             'user_id' => $user->id,
             'name' => 'Guide '.$suffix,
