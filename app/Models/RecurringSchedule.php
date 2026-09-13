@@ -11,6 +11,7 @@ use Illuminate\Validation\ValidationException;
 
 #[Fillable([
     'student_id',
+    'child_enrollment_id',
     'session_template_id',
     'day_of_week',
     'valid_from',
@@ -27,14 +28,43 @@ class RecurringSchedule extends Model
     protected static function booted(): void
     {
         static::saving(function (RecurringSchedule $schedule): void {
-            if (! $schedule->is_active) {
-                return;
-            }
-
             if ($schedule->valid_from && $schedule->valid_until && $schedule->valid_until->lt($schedule->valid_from)) {
                 throw ValidationException::withMessages([
                     'valid_until' => 'Tanggal akhir recurring schedule tidak boleh sebelum tanggal mulai.',
                 ]);
+            }
+
+            if ($schedule->child_enrollment_id !== null) {
+                $enrollment = ChildEnrollment::query()->find($schedule->child_enrollment_id);
+
+                if (! $enrollment || (int) $enrollment->student_id !== (int) $schedule->student_id) {
+                    throw ValidationException::withMessages([
+                        'child_enrollment_id' => 'Recurring schedule harus memakai enrollment milik anak yang sama.',
+                    ]);
+                }
+
+                if ($schedule->valid_from === null) {
+                    throw ValidationException::withMessages([
+                        'valid_from' => 'Recurring schedule yang terkait enrollment harus memiliki tanggal mulai.',
+                    ]);
+                }
+
+                if (! $enrollment->coversDate($schedule->valid_from->toDateString())) {
+                    throw ValidationException::withMessages([
+                        'valid_from' => 'Recurring schedule harus mulai di dalam periode enrollment.',
+                    ]);
+                }
+
+                if ($schedule->valid_until !== null
+                    && ! $enrollment->coversDate($schedule->valid_until->toDateString())) {
+                    throw ValidationException::withMessages([
+                        'valid_until' => 'Recurring schedule harus berakhir di dalam periode enrollment.',
+                    ]);
+                }
+            }
+
+            if (! $schedule->is_active) {
+                return;
             }
 
             $conflict = self::query()
@@ -78,6 +108,11 @@ class RecurringSchedule extends Model
     public function student(): BelongsTo
     {
         return $this->belongsTo(Student::class);
+    }
+
+    public function childEnrollment(): BelongsTo
+    {
+        return $this->belongsTo(ChildEnrollment::class);
     }
 
     public function sessionTemplate(): BelongsTo
