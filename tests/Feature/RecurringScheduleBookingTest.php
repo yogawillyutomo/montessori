@@ -6,11 +6,11 @@ use App\Models\ChildSessionBooking;
 use App\Models\ClassSession;
 use App\Models\RecurringSchedule;
 use App\Models\SessionOccurrence;
-use App\Models\SessionTemplate;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\WeeklySchedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -22,8 +22,8 @@ class RecurringScheduleBookingTest extends TestCase
     {
         $this->seed();
 
-        $legacyRecurringCount = (int) \DB::table('student_weekly_schedule')->count();
-        $legacyBookingCount = (int) \DB::table('class_session_student')->count();
+        $legacyRecurringCount = (int) DB::table('student_weekly_schedule')->count();
+        $legacyBookingCount = (int) DB::table('class_session_student')->count();
 
         $this->assertSame(
             $legacyRecurringCount,
@@ -176,7 +176,7 @@ class RecurringScheduleBookingTest extends TestCase
         $this->seed();
 
         $source = ClassSession::query()->firstOrFail();
-        $student = Student::query()->whereDoesntHave('classSessions', function ($query) use ($source): void {
+        $student = Student::query()->whereDoesntHave('classSessions', function ($query): void {
             $query->whereDate('session_date', '2026-12-22');
         })->firstOrFail();
 
