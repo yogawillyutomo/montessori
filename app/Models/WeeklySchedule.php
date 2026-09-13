@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Alpha\LegacyBookingBridgeService;
 use App\Services\Alpha\LegacySessionBridgeService;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -20,10 +21,12 @@ class WeeklySchedule extends Model
     {
         static::saved(function (WeeklySchedule $schedule): void {
             app(LegacySessionBridgeService::class)->syncTemplate($schedule);
+            app(LegacyBookingBridgeService::class)->syncRecurringSchedulesForSchedule($schedule);
         });
 
         static::deleted(function (WeeklySchedule $schedule): void {
             app(LegacySessionBridgeService::class)->markTemplateLegacyDeleted($schedule);
+            app(LegacyBookingBridgeService::class)->markRecurringSchedulesForLegacyScheduleDeleted($schedule);
         });
     }
 
@@ -48,7 +51,10 @@ class WeeklySchedule extends Model
 
     public function students(): BelongsToMany
     {
-        return $this->belongsToMany(Student::class, 'student_weekly_schedule')->withTimestamps();
+        return $this->belongsToMany(Student::class, 'student_weekly_schedule')
+            ->using(StudentWeeklySchedule::class)
+            ->withPivot('id')
+            ->withTimestamps();
     }
 
     public function classSessions(): HasMany
