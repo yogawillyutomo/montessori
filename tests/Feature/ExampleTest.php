@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Attendance;
 use App\Models\ClassSession;
 use App\Models\DevelopmentArea;
+use App\Models\FollowUpCandidate;
 use App\Models\IlpPlan;
 use App\Models\Indicator;
 use App\Models\Observation;
@@ -257,7 +258,7 @@ class ExampleTest extends TestCase
             ->assertSessionHasErrors('starts_at');
     }
 
-    public function test_daily_monitoring_stores_multiple_observations_and_creates_ilp_follow_up(): void
+    public function test_daily_monitoring_stores_multiple_observations_and_creates_review_candidate_without_auto_ilp(): void
     {
         $this->seed();
         $this->signIn();
@@ -277,7 +278,7 @@ class ExampleTest extends TestCase
             'note' => 'Monitoring harian dari form baru.',
             'observations' => [
                 $indicators['PMK01']->id => ['status' => 'independent'],
-                $indicators['PMK02']->id => ['status' => 'emerging'],
+                $indicators['PMK02']->id => ['status' => 'needs_support'],
             ],
         ])->assertRedirect('/process/observations#monitoring-harian')
             ->assertSessionDoesntHaveErrors();
@@ -289,7 +290,12 @@ class ExampleTest extends TestCase
             ->where('status', 'included_in_report')
             ->exists());
 
-        $this->assertTrue(IlpPlan::query()
+        $this->assertTrue(FollowUpCandidate::query()
+            ->where('student_id', $student->id)
+            ->where('indicator_id', $indicators['PMK02']->id)
+            ->where('status', FollowUpCandidate::STATUS_OPEN)
+            ->exists());
+        $this->assertFalse(IlpPlan::query()
             ->where('student_id', $student->id)
             ->where('indicator_id', $indicators['PMK02']->id)
             ->exists());
