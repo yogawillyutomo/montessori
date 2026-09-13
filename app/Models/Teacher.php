@@ -35,6 +35,16 @@ class Teacher extends Model
         return $this->hasMany(ClassSession::class);
     }
 
+    public function environmentAssignments(): HasMany
+    {
+        return $this->hasMany(EnvironmentGuideAssignment::class);
+    }
+
+    public function childResponsibilities(): HasMany
+    {
+        return $this->hasMany(ChildGuideResponsibility::class);
+    }
+
     public function observations(): HasMany
     {
         return $this->hasMany(Observation::class);
