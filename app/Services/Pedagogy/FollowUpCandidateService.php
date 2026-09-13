@@ -6,6 +6,7 @@ use App\Models\FollowUpCandidate;
 use App\Models\IlpPlan;
 use App\Models\Indicator;
 use App\Models\Observation;
+use App\Models\Student;
 use App\Models\Term;
 use App\Models\User;
 use App\Services\Alpha\AccessScopeService;
@@ -69,6 +70,19 @@ class FollowUpCandidateService
                 ]);
             }
 
+            if (! $resolvedIndicator->is_active) {
+                throw ValidationException::withMessages([
+                    'indicator_id' => 'Indicator nonaktif tidak dapat digunakan untuk support plan baru.',
+                ]);
+            }
+
+            $sourceAreaId = $locked->sourceObservation?->development_area_id;
+            if ($sourceAreaId && (int) $resolvedIndicator->development_area_id !== (int) $sourceAreaId) {
+                throw ValidationException::withMessages([
+                    'indicator_id' => 'Indicator harus berasal dari area perkembangan yang sama dengan observation sumber.',
+                ]);
+            }
+
             $term = Term::query()->where('is_current', true)->first();
 
             $plan = IlpPlan::query()->create([
@@ -119,7 +133,7 @@ class FollowUpCandidateService
         });
     }
 
-    private function authorizeActorForStudent(User $actor, $student): void
+    private function authorizeActorForStudent(User $actor, Student $student): void
     {
         if (! in_array($actor->role, [Role::SUPER_ADMIN, Role::ADMIN, Role::TEACHER], true)) {
             throw new AuthorizationException('Pengguna ini tidak diizinkan meninjau follow-up candidate.');
