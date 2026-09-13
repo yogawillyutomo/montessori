@@ -58,22 +58,7 @@ class AccessScopeService
             return SchoolClass::query()->pluck('id')->map(fn ($id): int => (int) $id)->all();
         }
 
-        if ($user->role === Role::TEACHER) {
-            $teacher = $this->teacherFor($user);
-
-            if (! $teacher) {
-                return [];
-            }
-
-            return SchoolClass::query()
-                ->whereHas('weeklySchedules', fn (Builder $query) => $query->where('teacher_id', $teacher->id))
-                ->orWhereHas('classSessions', fn (Builder $query) => $query->where('teacher_id', $teacher->id))
-                ->pluck('id')
-                ->map(fn ($id): int => (int) $id)
-                ->all();
-        }
-
-        if ($user->role === Role::PARENT) {
+        if (in_array($user->role, [Role::TEACHER, Role::PARENT], true)) {
             return Student::query()
                 ->whereIn('id', $this->accessibleStudentIds($user))
                 ->pluck('school_class_id')
@@ -171,13 +156,47 @@ class AccessScopeService
 
     public function scopeStudentsForTeacher(Builder $query, int $teacherId): Builder
     {
-        // Access must come from an intentional schedule/session relationship. An
-        // observation is evidence created inside an already-authorized context and
-        // must never become a new source of broader child authorization by itself.
-        return $query->where(function (Builder $teacherQuery) use ($teacherId): void {
+        $today = now()->toDateString();
+
+        return $query->where(function (Builder $teacherQuery) use ($teacherId, $today): void {
             $teacherQuery
+                // Legacy compatibility while schedule/session domains are migrated.
                 ->whereHas('weeklySchedules', fn (Builder $scheduleQuery) => $scheduleQuery->where('teacher_id', $teacherId))
-                ->orWhereHas('classSessions', fn (Builder $sessionQuery) => $sessionQuery->where('teacher_id', $teacherId));
+                ->orWhereHas('classSessions', fn (Builder $sessionQuery) => $sessionQuery->where('teacher_id', $teacherId))
+                // Intentional Montessori environment context. Only guide roles grant
+                // broad child scope; assistants/specialists require contextual access.
+                ->orWhereHas('environmentMemberships', function (Builder $membershipQuery) use ($teacherId, $today): void {
+                    $membershipQuery
+                        ->where('status', 'active')
+                        ->whereDate('valid_from', '<=', $today)
+                        ->where(function (Builder $periodQuery) use ($today): void {
+                            $periodQuery->whereNull('valid_until')->orWhereDate('valid_until', '>=', $today);
+                        })
+                        ->whereHas('environment', function (Builder $environmentQuery) use ($teacherId, $today): void {
+                            $environmentQuery
+                                ->where('is_active', true)
+                                ->whereHas('guideAssignments', function (Builder $assignmentQuery) use ($teacherId, $today): void {
+                                    $assignmentQuery
+                                        ->where('teacher_id', $teacherId)
+                                        ->whereIn('assignment_role', ['lead_guide', 'guide'])
+                                        ->where('is_active', true)
+                                        ->whereDate('valid_from', '<=', $today)
+                                        ->where(function (Builder $periodQuery) use ($today): void {
+                                            $periodQuery->whereNull('valid_until')->orWhereDate('valid_until', '>=', $today);
+                                        });
+                                });
+                        });
+                })
+                // Explicit child-level responsibility such as primary guide/report owner.
+                ->orWhereHas('guideResponsibilities', function (Builder $responsibilityQuery) use ($teacherId, $today): void {
+                    $responsibilityQuery
+                        ->where('teacher_id', $teacherId)
+                        ->where('is_active', true)
+                        ->whereDate('valid_from', '<=', $today)
+                        ->where(function (Builder $periodQuery) use ($today): void {
+                            $periodQuery->whereNull('valid_until')->orWhereDate('valid_until', '>=', $today);
+                        });
+                });
         });
     }
 

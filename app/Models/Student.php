@@ -43,6 +43,16 @@ class Student extends Model
         return $this->belongsToMany(ClassSession::class, 'class_session_student')->withTimestamps();
     }
 
+    public function environmentMemberships(): HasMany
+    {
+        return $this->hasMany(EnvironmentMembership::class);
+    }
+
+    public function guideResponsibilities(): HasMany
+    {
+        return $this->hasMany(ChildGuideResponsibility::class);
+    }
+
     public function attendances(): HasMany
     {
         return $this->hasMany(Attendance::class);

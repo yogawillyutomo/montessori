@@ -26,6 +26,11 @@ class ClassLevel extends Model
         return $this->hasMany(SchoolClass::class);
     }
 
+    public function environments(): HasMany
+    {
+        return $this->hasMany(Environment::class);
+    }
+
     public function getAgeRangeLabelAttribute(): string
     {
         if ($this->min_age_months === null && $this->max_age_months === null) {
