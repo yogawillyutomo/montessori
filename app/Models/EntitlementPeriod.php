@@ -55,14 +55,63 @@ class EntitlementPeriod extends Model
                 ]);
             }
 
+            if ((int) $period->base_quantity < 0) {
+                throw ValidationException::withMessages([
+                    'base_quantity' => 'Base entitlement quantity tidak boleh negatif.',
+                ]);
+            }
+
             if ($period->period_start === null || $period->period_end === null || $period->period_end->lt($period->period_start)) {
                 throw ValidationException::withMessages([
                     'period_end' => 'Rentang entitlement period tidak valid.',
                 ]);
             }
 
-            if ($period->quantity_source !== 'plan'
-                && ($period->confirmed_by === null || $period->confirmed_at === null || trim((string) $period->confirmation_reason) === '')) {
+            $enrollment = ChildEnrollment::query()->find($period->child_enrollment_id);
+            $assignment = EnrollmentPlanAssignment::query()->find($period->enrollment_plan_assignment_id);
+            $plan = SessionPlan::query()->find($period->session_plan_id);
+
+            if (! $enrollment || ! $assignment || ! $plan) {
+                throw ValidationException::withMessages([
+                    'child_enrollment_id' => 'Enrollment, plan assignment, atau session plan entitlement period tidak ditemukan.',
+                ]);
+            }
+
+            if ((int) $assignment->child_enrollment_id !== (int) $enrollment->id
+                || (int) $assignment->session_plan_id !== (int) $plan->id
+                || $assignment->cancelled_at !== null) {
+                throw ValidationException::withMessages([
+                    'enrollment_plan_assignment_id' => 'Plan assignment entitlement period tidak konsisten atau sudah dibatalkan.',
+                ]);
+            }
+
+            if ($enrollment->starts_on->gt($period->period_end)
+                || ($enrollment->ends_on !== null && $enrollment->ends_on->lt($period->period_start))) {
+                throw ValidationException::withMessages([
+                    'period_start' => 'Entitlement period harus beririsan dengan periode enrollment anak.',
+                ]);
+            }
+
+            if ($assignment->valid_from->gt($period->period_end)
+                || ($assignment->valid_until !== null && $assignment->valid_until->lt($period->period_start))) {
+                throw ValidationException::withMessages([
+                    'enrollment_plan_assignment_id' => 'Plan assignment harus beririsan dengan entitlement period.',
+                ]);
+            }
+
+            if ($period->quantity_source === 'plan') {
+                if ((int) $period->base_quantity !== (int) $plan->entitlement_quantity) {
+                    throw ValidationException::withMessages([
+                        'base_quantity' => 'Quantity bersumber dari plan harus sama dengan entitlement quantity plan.',
+                    ]);
+                }
+
+                $period->confirmation_reason = null;
+                $period->confirmed_by = null;
+                $period->confirmed_at = null;
+            } elseif ($period->confirmed_by === null
+                || $period->confirmed_at === null
+                || trim((string) $period->confirmation_reason) === '') {
                 throw ValidationException::withMessages([
                     'confirmation_reason' => 'Entitlement quantity override harus memiliki actor, waktu, dan alasan konfirmasi.',
                 ]);
