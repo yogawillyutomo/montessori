@@ -2,15 +2,54 @@
 
 namespace App\Http\Controllers\Alpha;
 
+use App\Http\Controllers\Alpha\Concerns\ProvidesAlphaShell;
 use App\Http\Controllers\Controller;
 use App\Models\FollowUpCandidate;
 use App\Models\Indicator;
+use App\Services\Alpha\AccessScopeService;
 use App\Services\Pedagogy\FollowUpCandidateService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\View\View;
 
 class FollowUpCandidateController extends Controller
 {
+    use ProvidesAlphaShell;
+
+    public function index(Request $request, AccessScopeService $scope): View
+    {
+        $requestedStatus = $request->query('status', FollowUpCandidate::STATUS_OPEN);
+        $status = in_array($requestedStatus, FollowUpCandidate::STATUSES, true)
+            ? $requestedStatus
+            : FollowUpCandidate::STATUS_OPEN;
+        $studentIds = $scope->accessibleStudentIds($request->user());
+
+        return view('alpha.follow-up-candidates', [
+            ...$this->shell($request, 'process'),
+            'selectedStatus' => $status,
+            'statusOptions' => FollowUpCandidate::STATUSES,
+            'candidates' => FollowUpCandidate::query()
+                ->with([
+                    'student.schoolClass',
+                    'sourceObservation.teacher',
+                    'sourceObservation.developmentArea',
+                    'indicator.developmentArea',
+                    'reviewedBy',
+                    'supportPlan',
+                ])
+                ->whereIn('student_id', $studentIds)
+                ->where('status', $status)
+                ->latest()
+                ->get(),
+            'indicators' => Indicator::query()
+                ->with('developmentArea')
+                ->where('is_active', true)
+                ->orderBy('development_area_id')
+                ->orderBy('code')
+                ->get(),
+        ]);
+    }
+
     public function confirm(
         Request $request,
         FollowUpCandidate $followUpCandidate,
