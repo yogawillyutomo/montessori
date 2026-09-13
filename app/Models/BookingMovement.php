@@ -24,9 +24,20 @@ class BookingMovement extends Model
 
     public const UPDATED_AT = null;
 
+    public const MOVEMENT_TYPES = [
+        'reschedule',
+        'makeup',
+    ];
+
     protected static function booted(): void
     {
         static::creating(function (BookingMovement $movement): void {
+            if (! in_array($movement->movement_type, self::MOVEMENT_TYPES, true)) {
+                throw ValidationException::withMessages([
+                    'movement_type' => 'Movement type harus reschedule atau makeup.',
+                ]);
+            }
+
             if ((int) $movement->source_booking_id === (int) $movement->destination_booking_id) {
                 throw ValidationException::withMessages([
                     'destination_booking_id' => 'Booking tujuan harus berbeda dari booking sumber.',

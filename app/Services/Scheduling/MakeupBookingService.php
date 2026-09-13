@@ -6,20 +6,22 @@ use App\Models\Attendance;
 use App\Models\BookingMovement;
 use App\Models\ChildSessionBooking;
 use App\Models\ClassSession;
+use App\Models\MakeupEligibility;
 use App\Models\SessionOccurrence;
 use App\Models\User;
 use App\Support\Alpha\Role;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
-class BookingRescheduleService
+class MakeupBookingService
 {
     public function __construct(
+        private readonly BookingLineageService $lineage,
         private readonly BookingEvidenceService $evidence,
     ) {}
 
-    public function reschedule(
-        ChildSessionBooking $sourceBooking,
+    public function schedule(
+        MakeupEligibility $eligibility,
         SessionOccurrence $destinationOccurrence,
         User $actor,
         string $reason,
@@ -28,10 +30,11 @@ class BookingRescheduleService
     ): BookingMovement {
         $reason = trim($reason);
         $capacityOverrideReason = trim((string) $capacityOverrideReason);
+        $this->authorize($actor);
 
         if ($reason === '') {
             throw ValidationException::withMessages([
-                'reason' => 'Alasan reschedule wajib dicatat.',
+                'reason' => 'Alasan makeup wajib dicatat.',
             ]);
         }
 
@@ -48,15 +51,28 @@ class BookingRescheduleService
         }
 
         return DB::transaction(function () use (
-            $sourceBooking,
+            $eligibility,
             $destinationOccurrence,
             $actor,
             $reason,
             $capacityOverride,
             $capacityOverrideReason,
         ): BookingMovement {
+            $lockedEligibility = MakeupEligibility::query()
+                ->whereKey($eligibility->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($lockedEligibility->status !== 'pending') {
+                throw ValidationException::withMessages([
+                    'makeup_eligibility_id' => 'Hanya makeup eligibility PENDING yang dapat dijadwalkan.',
+                ]);
+            }
+
+            $origin = ChildSessionBooking::query()->findOrFail($lockedEligibility->source_booking_id);
+            $currentSnapshot = $this->lineage->currentBooking($origin);
             $source = ChildSessionBooking::query()
-                ->whereKey($sourceBooking->id)
+                ->whereKey($currentSnapshot->id)
                 ->lockForUpdate()
                 ->firstOrFail();
             $destination = SessionOccurrence::query()
@@ -64,39 +80,53 @@ class BookingRescheduleService
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if ($source->status !== 'scheduled') {
+            if ((int) $source->session_credit_id !== (int) $lockedEligibility->session_credit_id) {
                 throw ValidationException::withMessages([
-                    'source_booking_id' => 'Hanya booking aktif berstatus scheduled yang dapat dipindahkan.',
+                    'session_credit_id' => 'Current booking makeup tidak lagi memakai session credit eligibility.',
                 ]);
             }
 
-            if ((int) $source->session_occurrence_id === (int) $destination->id) {
+            $credit = $source->sessionCredit()->lockForUpdate()->firstOrFail();
+            if ($credit->voided_at !== null || $credit->status !== 'booked') {
                 throw ValidationException::withMessages([
-                    'destination_occurrence_id' => 'Occurrence tujuan harus berbeda dari occurrence sumber.',
-                ]);
-            }
-
-            if (in_array($destination->status, ['cancelled', 'completed'], true)) {
-                throw ValidationException::withMessages([
-                    'destination_occurrence_id' => 'Occurrence tujuan sudah tidak menerima booking baru.',
+                    'session_credit_id' => 'Makeup hanya dapat dijadwalkan dengan session credit BOOKED yang aktif.',
                 ]);
             }
 
             if ($source->outgoingMovement()->exists()) {
                 throw ValidationException::withMessages([
-                    'source_booking_id' => 'Booking sumber sudah pernah dipindahkan.',
+                    'source_booking_id' => 'Current booking sudah memiliki downstream movement.',
                 ]);
             }
 
-            if ($this->evidence->hasAnyMarkedAttendance($source)) {
+            $schoolCancellationSource = $source->status === 'session_cancelled';
+
+            if (! $schoolCancellationSource) {
+                if ($source->status !== 'scheduled') {
+                    throw ValidationException::withMessages([
+                        'source_booking_id' => 'Makeup hanya dapat berangkat dari booking scheduled dengan missed outcome atau source school cancellation.',
+                    ]);
+                }
+
+                $attendance = $this->evidence->attendanceFor($source);
+                if (! $attendance
+                    || $attendance->marked_at === null
+                    || ! in_array($attendance->status, ['sick', 'excused', 'absent'], true)) {
+                    throw ValidationException::withMessages([
+                        'source_booking_id' => 'Booking sumber makeup harus memiliki missed attendance outcome yang sudah ditandai.',
+                    ]);
+                }
+            }
+
+            if ((int) $source->session_occurrence_id === (int) $destination->id) {
                 throw ValidationException::withMessages([
-                    'source_booking_id' => 'Booking yang sudah memiliki attendance outcome tidak boleh memakai reschedule biasa. Gunakan workflow makeup atau koreksi attendance.',
+                    'destination_occurrence_id' => 'Occurrence tujuan makeup harus berbeda dari source occurrence.',
                 ]);
             }
 
-            if ($this->evidence->hasObservationEvidence($source)) {
+            if (in_array($destination->status, ['cancelled', 'completed'], true)) {
                 throw ValidationException::withMessages([
-                    'source_booking_id' => 'Booking yang sudah memiliki observasi tidak boleh dipindahkan.',
+                    'destination_occurrence_id' => 'Occurrence tujuan makeup sudah tidak menerima booking baru.',
                 ]);
             }
 
@@ -109,7 +139,7 @@ class BookingRescheduleService
 
             if ($duplicateDestinationDate) {
                 throw ValidationException::withMessages([
-                    'destination_occurrence_id' => 'Anak sudah memiliki booking aktif lain pada tanggal tujuan.',
+                    'destination_occurrence_id' => 'Anak sudah memiliki booking aktif lain pada tanggal tujuan makeup.',
                 ]);
             }
 
@@ -126,10 +156,12 @@ class BookingRescheduleService
                 }
             }
 
-            $source->forceFill([
-                'status' => 'rescheduled_out',
-                'active_on' => null,
-            ])->save();
+            if ($source->status === 'scheduled') {
+                $source->forceFill([
+                    'status' => 'rescheduled_out',
+                    'active_on' => null,
+                ])->save();
+            }
 
             $destinationBooking = ChildSessionBooking::query()->create([
                 'student_id' => $source->student_id,
@@ -138,7 +170,7 @@ class BookingRescheduleService
                 'credit_allocated_by' => $source->credit_allocated_by,
                 'credit_allocated_at' => $source->credit_allocated_at,
                 'session_occurrence_id' => $destination->id,
-                'booking_type' => 'rescheduled',
+                'booking_type' => 'makeup',
                 'status' => 'scheduled',
                 'source_type' => 'movement',
                 'created_by' => $actor->id,
@@ -147,41 +179,18 @@ class BookingRescheduleService
                 'capacity_override_reason' => $capacityOverride ? $capacityOverrideReason : null,
             ]);
 
-            $this->syncLegacySourceAfterMove($source);
             $this->syncLegacyDestination($destinationBooking, $destination);
 
             return BookingMovement::query()->create([
                 'source_booking_id' => $source->id,
                 'destination_booking_id' => $destinationBooking->id,
-                'movement_type' => 'reschedule',
+                'movement_type' => 'makeup',
                 'reason' => $reason,
                 'moved_by' => $actor->id,
                 'capacity_override' => $capacityOverride,
                 'capacity_override_reason' => $capacityOverride ? $capacityOverrideReason : null,
             ])->load(['sourceBooking', 'destinationBooking', 'movedBy']);
         });
-    }
-
-    private function syncLegacySourceAfterMove(ChildSessionBooking $source): void
-    {
-        if (! $source->legacy_class_session_id) {
-            return;
-        }
-
-        $attendance = $this->evidence->attendanceFor($source);
-
-        if ($attendance && $attendance->marked_at === null) {
-            $attendance->delete();
-        }
-
-        $legacySession = ClassSession::query()->find($source->legacy_class_session_id);
-        if (! $legacySession) {
-            return;
-        }
-
-        if ($legacySession->students()->whereKey($source->student_id)->exists()) {
-            $legacySession->students()->detach($source->student_id);
-        }
     }
 
     private function syncLegacyDestination(
@@ -223,6 +232,15 @@ class BookingRescheduleService
         } elseif ((int) $attendance->child_session_booking_id !== (int) $destinationBooking->id) {
             throw ValidationException::withMessages([
                 'attendance' => 'Attendance destination sudah terhubung ke booking lain.',
+            ]);
+        }
+    }
+
+    private function authorize(User $actor): void
+    {
+        if (! in_array($actor->role, [Role::SUPER_ADMIN, Role::ADMIN, Role::TEACHER], true)) {
+            throw ValidationException::withMessages([
+                'actor' => 'Penjadwalan makeup hanya boleh dilakukan oleh super admin, admin, atau teacher.',
             ]);
         }
     }

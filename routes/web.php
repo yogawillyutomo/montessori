@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Alpha\AttendanceController;
 use App\Http\Controllers\Alpha\AuthController;
 use App\Http\Controllers\Alpha\DashboardController;
 use App\Http\Controllers\Alpha\MasterController;
@@ -88,7 +89,9 @@ Route::middleware('auth')->group(function (): void {
             ->middleware(EnsureTeacherSessionMutationScope::class)
             ->name('alpha.process.sessions.update');
         Route::patch('/process/sessions/{classSession}/note', [ProcessController::class, 'updateSessionNote'])->name('alpha.process.sessions.note');
-        Route::patch('/process/sessions/{classSession}/attendance', [ProcessController::class, 'updateSessionAttendance'])->name('alpha.process.sessions.attendance');
+        Route::patch('/process/sessions/{classSession}/attendance', [AttendanceController::class, 'update'])
+            ->middleware(EnsureTeacherSessionMutationScope::class)
+            ->name('alpha.process.sessions.attendance');
         Route::patch('/process/sessions/{classSession}/close', [ProcessController::class, 'closeSession'])->name('alpha.process.sessions.close');
         Route::delete('/process/sessions/{classSession}', [ProcessController::class, 'destroySession'])->name('alpha.process.sessions.destroy');
         Route::post('/observations', [ProcessController::class, 'storeObservation'])->name('alpha.observations.store');

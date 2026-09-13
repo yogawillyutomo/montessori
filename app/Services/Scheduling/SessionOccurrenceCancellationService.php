@@ -8,11 +8,17 @@ use App\Models\ClassSession;
 use App\Models\Observation;
 use App\Models\SessionOccurrence;
 use App\Models\User;
+use App\Services\Entitlement\MakeupEligibilityService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class SessionOccurrenceCancellationService
 {
+    public function __construct(
+        private readonly BookingEvidenceService $evidence,
+        private readonly MakeupEligibilityService $eligibilities,
+    ) {}
+
     public function cancel(
         SessionOccurrence $occurrence,
         User $actor,
@@ -43,6 +49,12 @@ class SessionOccurrenceCancellationService
             }
 
             $this->assertNoRecordedSessionEvidence($locked);
+
+            $creditedBookingIds = ChildSessionBooking::query()
+                ->where('session_occurrence_id', $locked->id)
+                ->whereIn('status', ChildSessionBooking::ACTIVE_STATUSES)
+                ->whereNotNull('session_credit_id')
+                ->pluck('id');
 
             if ($locked->legacy_class_session_id) {
                 $legacySession = ClassSession::query()->find($locked->legacy_class_session_id);
@@ -75,12 +87,30 @@ class SessionOccurrenceCancellationService
                 'cancelled_at' => now(),
             ])->save();
 
+            foreach ($creditedBookingIds as $bookingId) {
+                $booking = ChildSessionBooking::query()->findOrFail($bookingId);
+                $this->eligibilities->grantForSchoolCancellation($booking, $actor);
+            }
+
             return $locked->fresh();
         });
     }
 
     private function assertNoRecordedSessionEvidence(SessionOccurrence $occurrence): void
     {
+        $bookings = ChildSessionBooking::query()
+            ->where('session_occurrence_id', $occurrence->id)
+            ->get();
+
+        foreach ($bookings as $booking) {
+            if ($this->evidence->hasAnyMarkedAttendance($booking)
+                || $this->evidence->hasObservationEvidence($booking)) {
+                throw ValidationException::withMessages([
+                    'occurrence_id' => 'Session yang sudah memiliki presensi atau observasi tidak boleh dibatalkan.',
+                ]);
+            }
+        }
+
         if (! $occurrence->legacy_class_session_id) {
             return;
         }
