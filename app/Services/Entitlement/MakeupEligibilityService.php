@@ -22,11 +22,7 @@ class MakeupEligibilityService
             ]);
         }
 
-        if ($booking->session_credit_id === null) {
-            throw ValidationException::withMessages([
-                'session_credit_id' => 'Booking tanpa session credit tidak dapat memiliki makeup eligibility.',
-            ]);
-        }
+        $this->assertActiveBookedCredit($booking);
 
         $eligibility = MakeupEligibility::query()
             ->where('session_credit_id', $booking->session_credit_id)
@@ -62,11 +58,7 @@ class MakeupEligibilityService
         ChildSessionBooking $booking,
         User $actor,
     ): MakeupEligibility {
-        if ($booking->session_credit_id === null) {
-            throw ValidationException::withMessages([
-                'session_credit_id' => 'Booking tanpa session credit tidak dapat memiliki makeup eligibility.',
-            ]);
-        }
+        $this->assertActiveBookedCredit($booking);
 
         $existing = MakeupEligibility::query()
             ->where('session_credit_id', $booking->session_credit_id)
@@ -153,5 +145,21 @@ class MakeupEligibilityService
         ])->save();
 
         return $eligibility->fresh();
+    }
+
+    private function assertActiveBookedCredit(ChildSessionBooking $booking): void
+    {
+        if ($booking->session_credit_id === null) {
+            throw ValidationException::withMessages([
+                'session_credit_id' => 'Booking tanpa session credit tidak dapat memiliki makeup eligibility.',
+            ]);
+        }
+
+        $credit = $booking->sessionCredit()->first();
+        if (! $credit || $credit->voided_at !== null || $credit->status !== 'booked') {
+            throw ValidationException::withMessages([
+                'session_credit_id' => 'Makeup eligibility hanya dapat diberikan untuk session credit BOOKED yang aktif.',
+            ]);
+        }
     }
 }
