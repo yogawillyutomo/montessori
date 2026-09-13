@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Alpha\LegacyBookingBridgeService;
 use App\Services\Alpha\LegacySessionBridgeService;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -20,10 +21,12 @@ class ClassSession extends Model
     {
         static::saved(function (ClassSession $session): void {
             app(LegacySessionBridgeService::class)->syncOccurrence($session);
+            app(LegacyBookingBridgeService::class)->syncBookingsForSession($session);
         });
 
         static::deleted(function (ClassSession $session): void {
             app(LegacySessionBridgeService::class)->markOccurrenceLegacyDeleted($session);
+            app(LegacyBookingBridgeService::class)->markBookingsForLegacySessionDeleted($session);
         });
     }
 
@@ -54,7 +57,10 @@ class ClassSession extends Model
 
     public function students(): BelongsToMany
     {
-        return $this->belongsToMany(Student::class, 'class_session_student')->withTimestamps();
+        return $this->belongsToMany(Student::class, 'class_session_student')
+            ->using(ClassSessionStudent::class)
+            ->withPivot('id')
+            ->withTimestamps();
     }
 
     public function sessionOccurrence(): HasOne
