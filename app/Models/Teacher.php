@@ -50,6 +50,11 @@ class Teacher extends Model
         return $this->hasMany(Presentation::class);
     }
 
+    public function developmentProgressJudgements(): HasMany
+    {
+        return $this->hasMany(DevelopmentProgress::class, 'judged_by');
+    }
+
     public function observations(): HasMany
     {
         return $this->hasMany(Observation::class);

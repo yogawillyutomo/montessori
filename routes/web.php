@@ -3,6 +3,7 @@
 use App\Http\Controllers\Alpha\AttendanceController;
 use App\Http\Controllers\Alpha\AuthController;
 use App\Http\Controllers\Alpha\DashboardController;
+use App\Http\Controllers\Alpha\DevelopmentProgressController;
 use App\Http\Controllers\Alpha\MasterController;
 use App\Http\Controllers\Alpha\PresentationController;
 use App\Http\Controllers\Alpha\ProcessController;
@@ -96,6 +97,7 @@ Route::middleware('auth')->group(function (): void {
         Route::patch('/process/sessions/{classSession}/close', [ProcessController::class, 'closeSession'])->name('alpha.process.sessions.close');
         Route::delete('/process/sessions/{classSession}', [ProcessController::class, 'destroySession'])->name('alpha.process.sessions.destroy');
         Route::post('/presentations', [PresentationController::class, 'store'])->name('alpha.presentations.store');
+        Route::post('/development-progress', [DevelopmentProgressController::class, 'store'])->name('alpha.development-progress.store');
         Route::post('/observations', [ProcessController::class, 'storeObservation'])->name('alpha.observations.store');
         Route::patch('/process/ilp/{ilpPlan}', [ProcessController::class, 'updateIlp'])->name('alpha.process.ilp.update');
         Route::post('/reports/generate', [ReportController::class, 'generate'])->name('alpha.reports.generate');

@@ -30,6 +30,11 @@ class Indicator extends Model
         return $this->hasMany(Observation::class);
     }
 
+    public function developmentProgress(): HasMany
+    {
+        return $this->hasMany(DevelopmentProgress::class);
+    }
+
     public function ilpPlans(): HasMany
     {
         return $this->hasMany(IlpPlan::class);
