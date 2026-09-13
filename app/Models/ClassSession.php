@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 #[Fillable(['weekly_schedule_id', 'school_class_id', 'teacher_id', 'room', 'capacity', 'session_date', 'starts_at', 'ends_at', 'topic', 'status', 'class_note', 'follow_up_recommendation', 'closed_by', 'closed_at'])]
 class ClassSession extends Model
@@ -19,6 +21,37 @@ class ClassSession extends Model
 
     protected static function booted(): void
     {
+        static::updating(function (ClassSession $session): void {
+            if ($session->status === 'cancelled') {
+                return;
+            }
+
+            $studentIds = $session->students()->pluck('students.id')->map(fn ($id): int => (int) $id)->all();
+            if ($studentIds === []) {
+                return;
+            }
+
+            if ($session->capacity !== null && count($studentIds) > (int) $session->capacity) {
+                throw ValidationException::withMessages([
+                    'capacity' => "Kapasitas sesi ({$session->capacity}) lebih kecil dari jumlah anak yang sudah terdaftar.",
+                ]);
+            }
+
+            $conflict = DB::table('class_session_student as css')
+                ->join('class_sessions as cs', 'cs.id', '=', 'css.class_session_id')
+                ->whereIn('css.student_id', $studentIds)
+                ->whereDate('cs.session_date', $session->session_date->toDateString())
+                ->where('cs.status', '!=', 'cancelled')
+                ->where('cs.id', '!=', $session->id)
+                ->exists();
+
+            if ($conflict) {
+                throw ValidationException::withMessages([
+                    'student_ids' => 'Ada anak yang sudah memiliki sesi aktif lain pada tanggal yang sama.',
+                ]);
+            }
+        });
+
         static::saved(function (ClassSession $session): void {
             app(LegacySessionBridgeService::class)->syncOccurrence($session);
             app(LegacyBookingBridgeService::class)->syncBookingsForSession($session);
