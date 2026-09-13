@@ -2,8 +2,8 @@
 
 namespace App\Http\Requests\Alpha\Report;
 
-use App\Models\Student;
 use App\Models\Report;
+use App\Models\Student;
 use App\Services\Alpha\AccessScopeService;
 use App\Support\Alpha\Role;
 use Illuminate\Foundation\Http\FormRequest;
@@ -30,7 +30,9 @@ class SaveStudentReportRequest extends FormRequest
     {
         return [
             'term_id' => ['nullable', 'exists:terms,id'],
-            'status' => ['required', Rule::in(['draft', 'ready', 'published', 'archived'])],
+            // Publication is intentionally excluded from the generic save endpoint.
+            // Publishing must go through the dedicated, authorized publish action.
+            'status' => ['required', Rule::in(['draft', 'ready', 'archived'])],
             'manual_present_total' => ['nullable', 'integer', 'min:0', 'max:999'],
             'manual_sick_total' => ['nullable', 'integer', 'min:0', 'max:999'],
             'manual_excused_total' => ['nullable', 'integer', 'min:0', 'max:999'],
@@ -54,7 +56,7 @@ class SaveStudentReportRequest extends FormRequest
     {
         return [
             'status.required' => 'Status rapor wajib dipilih.',
-            'status.in' => 'Status rapor yang dipilih tidak valid.',
+            'status.in' => 'Status rapor yang dipilih tidak valid. Publish hanya boleh melalui aksi publish khusus.',
             'term_id.exists' => 'Term yang dipilih tidak valid.',
             'manual_present_total.integer' => 'Jumlah hadir harus berupa angka.',
             'manual_present_total.min' => 'Jumlah hadir tidak boleh negatif.',
@@ -85,22 +87,34 @@ class SaveStudentReportRequest extends FormRequest
     public function withValidator($validator): void
     {
         $validator->after(function ($validator): void {
-            if ($this->input('status') !== 'published') {
+            $user = $this->user();
+            $student = $this->route('student');
+
+            if (! $student instanceof Student || ! $user) {
                 return;
             }
 
-            $user = $this->user();
-            $student = $this->route('student');
-            $isExistingPublished = $student instanceof Student
-                && $this->integer('term_id') > 0
-                && Report::query()
-                    ->where('student_id', $student->id)
-                    ->where('term_id', $this->integer('term_id'))
-                    ->where('status', 'published')
-                    ->exists();
+            $termId = $this->integer('term_id');
+            if ($termId <= 0) {
+                return;
+            }
 
-            if (! $isExistingPublished && ! in_array($user?->role, [Role::SUPER_ADMIN, Role::ADMIN], true)) {
-                $validator->errors()->add('status', 'Hanya admin yang dapat mempublish rapor.');
+            $existing = Report::query()
+                ->where('student_id', $student->id)
+                ->where('term_id', $termId)
+                ->first();
+
+            if ($existing?->status === 'published') {
+                $validator->errors()->add(
+                    'status',
+                    'Rapor yang sudah dipublish tidak dapat diedit melalui form biasa. Gunakan workflow revisi pada pengembangan berikutnya.'
+                );
+
+                return;
+            }
+
+            if ($this->input('status') === 'archived' && ! in_array($user->role, [Role::SUPER_ADMIN, Role::ADMIN], true)) {
+                $validator->errors()->add('status', 'Hanya admin yang dapat mengarsipkan rapor.');
             }
         });
     }

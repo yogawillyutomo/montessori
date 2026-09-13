@@ -6,11 +6,12 @@ use App\Http\Controllers\Alpha\MasterController;
 use App\Http\Controllers\Alpha\ProcessController;
 use App\Http\Controllers\Alpha\ReportController;
 use App\Http\Controllers\Alpha\SettingController;
+use App\Http\Middleware\EnsureTeacherSessionMutationScope;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function (): void {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-    Route::post('/login', [AuthController::class, 'login'])->name('login.store');
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1')->name('login.store');
 });
 
 Route::middleware('auth')->group(function (): void {
@@ -83,7 +84,9 @@ Route::middleware('auth')->group(function (): void {
 
     Route::middleware('role:super_admin,admin,teacher')->group(function (): void {
         Route::post('/sessions/from-schedule', [ProcessController::class, 'createSession'])->name('alpha.sessions.create-from-schedule');
-        Route::patch('/process/sessions/{classSession}', [ProcessController::class, 'updateSession'])->name('alpha.process.sessions.update');
+        Route::patch('/process/sessions/{classSession}', [ProcessController::class, 'updateSession'])
+            ->middleware(EnsureTeacherSessionMutationScope::class)
+            ->name('alpha.process.sessions.update');
         Route::patch('/process/sessions/{classSession}/note', [ProcessController::class, 'updateSessionNote'])->name('alpha.process.sessions.note');
         Route::patch('/process/sessions/{classSession}/attendance', [ProcessController::class, 'updateSessionAttendance'])->name('alpha.process.sessions.attendance');
         Route::patch('/process/sessions/{classSession}/close', [ProcessController::class, 'closeSession'])->name('alpha.process.sessions.close');
