@@ -171,11 +171,13 @@ class AccessScopeService
 
     public function scopeStudentsForTeacher(Builder $query, int $teacherId): Builder
     {
+        // Access must come from an intentional schedule/session relationship. An
+        // observation is evidence created inside an already-authorized context and
+        // must never become a new source of broader child authorization by itself.
         return $query->where(function (Builder $teacherQuery) use ($teacherId): void {
             $teacherQuery
                 ->whereHas('weeklySchedules', fn (Builder $scheduleQuery) => $scheduleQuery->where('teacher_id', $teacherId))
-                ->orWhereHas('classSessions', fn (Builder $sessionQuery) => $sessionQuery->where('teacher_id', $teacherId))
-                ->orWhereHas('observations', fn (Builder $observationQuery) => $observationQuery->where('teacher_id', $teacherId));
+                ->orWhereHas('classSessions', fn (Builder $sessionQuery) => $sessionQuery->where('teacher_id', $teacherId));
         });
     }
 
