@@ -15,6 +15,9 @@ use LogicException;
 #[Fillable([
     'student_id',
     'child_enrollment_id',
+    'session_credit_id',
+    'credit_allocated_by',
+    'credit_allocated_at',
     'session_occurrence_id',
     'booking_type',
     'status',
@@ -64,6 +67,46 @@ class ChildSessionBooking extends Model
                         'child_enrollment_id' => 'Booking harus memakai enrollment milik anak yang sama.',
                     ]);
                 }
+            }
+
+            if ($booking->session_credit_id !== null) {
+                if (! $enrollment) {
+                    throw ValidationException::withMessages([
+                        'session_credit_id' => 'Booking dengan session credit wajib memiliki child enrollment.',
+                    ]);
+                }
+
+                if ($booking->credit_allocated_by === null || $booking->credit_allocated_at === null) {
+                    throw ValidationException::withMessages([
+                        'session_credit_id' => 'Alokasi session credit harus memiliki actor dan timestamp.',
+                    ]);
+                }
+
+                $credit = SessionCredit::query()->with('entitlementPeriod')->find($booking->session_credit_id);
+                if (! $credit
+                    || $credit->voided_at !== null
+                    || ! in_array($credit->status, ['available', 'booked'], true)
+                    || ! $credit->entitlementPeriod
+                    || (int) $credit->entitlementPeriod->child_enrollment_id !== (int) $booking->child_enrollment_id) {
+                    throw ValidationException::withMessages([
+                        'session_credit_id' => 'Session credit tidak valid, sudah di-void/settled, atau bukan milik enrollment booking.',
+                    ]);
+                }
+
+                $duplicateCredit = self::query()
+                    ->active()
+                    ->where('session_credit_id', $credit->id)
+                    ->when($booking->exists, fn (Builder $query) => $query->whereKeyNot($booking->getKey()))
+                    ->exists();
+
+                if ($duplicateCredit) {
+                    throw ValidationException::withMessages([
+                        'session_credit_id' => 'Satu session credit tidak boleh dialokasikan ke dua booking aktif sekaligus.',
+                    ]);
+                }
+            } else {
+                $booking->credit_allocated_by = null;
+                $booking->credit_allocated_at = null;
             }
 
             if (! in_array($booking->status, self::ACTIVE_STATUSES, true)) {
@@ -160,9 +203,20 @@ class ChildSessionBooking extends Model
             }
         });
 
+        static::updating(function (ChildSessionBooking $booking): void {
+            if ($booking->getOriginal('session_credit_id') !== null
+                && $booking->isDirty('session_credit_id')) {
+                throw new LogicException('Session credit yang sudah dialokasikan ke booking tidak boleh diganti atau dilepas secara langsung. Gunakan workflow rekonsiliasi.');
+            }
+        });
+
         static::deleting(function (ChildSessionBooking $booking): void {
             if ($booking->incomingMovement()->exists() || $booking->outgoingMovement()->exists()) {
                 throw new LogicException('Booking yang menjadi bagian movement chain tidak boleh dihapus.');
+            }
+
+            if ($booking->session_credit_id !== null) {
+                throw new LogicException('Booking yang sudah terkait session credit tidak boleh dihapus. Pertahankan histori dan gunakan workflow cancellation/reconciliation.');
             }
         });
     }
@@ -171,6 +225,7 @@ class ChildSessionBooking extends Model
     {
         return [
             'active_on' => 'date',
+            'credit_allocated_at' => 'datetime',
             'cancelled_at' => 'datetime',
             'capacity_override' => 'boolean',
             'legacy_deleted_at' => 'datetime',
@@ -192,6 +247,16 @@ class ChildSessionBooking extends Model
     public function childEnrollment(): BelongsTo
     {
         return $this->belongsTo(ChildEnrollment::class);
+    }
+
+    public function sessionCredit(): BelongsTo
+    {
+        return $this->belongsTo(SessionCredit::class);
+    }
+
+    public function creditAllocatedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'credit_allocated_by');
     }
 
     public function sessionOccurrence(): BelongsTo
