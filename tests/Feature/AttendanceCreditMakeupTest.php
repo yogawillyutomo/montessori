@@ -16,6 +16,7 @@ use App\Services\Enrollment\EnrollmentPlanService;
 use App\Services\Entitlement\AttendanceOutcomeService;
 use App\Services\Entitlement\CreditAllocationService;
 use App\Services\Entitlement\EntitlementPeriodService;
+use App\Services\Scheduling\BookingRescheduleService;
 use App\Services\Scheduling\ChildBookingCancellationService;
 use App\Services\Scheduling\MakeupBookingService;
 use App\Services\Scheduling\SessionOccurrenceCancellationService;
@@ -241,6 +242,32 @@ class AttendanceCreditMakeupTest extends TestCase
         }
     }
 
+    public function test_recorded_missed_outcome_cannot_be_disguised_as_normal_reschedule(): void
+    {
+        [, $admin, , $credit, $booking] = $this->creditedBooking('M8-RESCHEDULE-GUARD', '2026-09-07');
+
+        app(AttendanceOutcomeService::class)->recordForBooking(
+            $booking,
+            'sick',
+            'Missed session has already happened.',
+            $admin,
+        );
+
+        try {
+            app(BookingRescheduleService::class)->reschedule(
+                $booking,
+                $this->occurrence('2026-09-14'),
+                $admin,
+                'Attempt to bypass makeup.',
+            );
+            $this->fail('Recorded missed attendance must require makeup workflow.');
+        } catch (ValidationException) {
+            $this->assertSame('scheduled', $booking->fresh()->status);
+            $this->assertSame('booked', $credit->fresh()->status);
+            $this->assertSame('pending', MakeupEligibility::query()->where('session_credit_id', $credit->id)->firstOrFail()->status);
+        }
+    }
+
     public function test_credited_child_cancellation_is_blocked_until_policy_reconciliation(): void
     {
         [, $admin, , $credit, $booking] = $this->creditedBooking('M8-CANCEL-GUARD', '2026-09-07');
@@ -263,7 +290,9 @@ class AttendanceCreditMakeupTest extends TestCase
      */
     private function creditedBooking(string $code, string $date): array
     {
-        $this->seed();
+        if (! User::query()->exists()) {
+            $this->seed();
+        }
 
         $student = Student::query()->firstOrFail();
         $admin = User::query()->where('role', 'admin')->firstOrFail();
