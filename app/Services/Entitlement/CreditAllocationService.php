@@ -33,6 +33,12 @@ class CreditAllocationService
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            if ($period->status !== 'open') {
+                throw ValidationException::withMessages([
+                    'entitlement_period_id' => 'Session credit dari entitlement period non-OPEN tidak dapat dialokasikan.',
+                ]);
+            }
+
             if ($lockedBooking->status !== 'scheduled') {
                 throw ValidationException::withMessages([
                     'booking' => 'Session credit hanya dapat dialokasikan ke booking aktif berstatus scheduled.',
