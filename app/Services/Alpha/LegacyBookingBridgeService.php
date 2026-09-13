@@ -15,6 +15,11 @@ use Illuminate\Support\Facades\Schema;
 
 class LegacyBookingBridgeService
 {
+    private const PRESERVED_TERMINAL_STATUSES = [
+        'rescheduled_out',
+        'cancelled',
+    ];
+
     public function syncRecurringPivot(StudentWeeklySchedule $pivot): ?RecurringSchedule
     {
         if (! Schema::hasTable('recurring_schedules')) {
@@ -123,13 +128,21 @@ class LegacyBookingBridgeService
             return;
         }
 
-        ChildSessionBooking::query()
+        $booking = ChildSessionBooking::query()
             ->where('legacy_class_session_student_id', $pivot->id)
-            ->update([
-                'status' => 'cancelled',
-                'active_on' => null,
-                'legacy_deleted_at' => now(),
-            ]);
+            ->first();
+
+        if (! $booking) {
+            return;
+        }
+
+        $booking->forceFill([
+            'status' => in_array($booking->status, self::PRESERVED_TERMINAL_STATUSES, true)
+                ? $booking->status
+                : 'cancelled',
+            'active_on' => null,
+            'legacy_deleted_at' => now(),
+        ])->save();
     }
 
     public function syncBookingsForSession(ClassSession $session): void
@@ -143,18 +156,27 @@ class LegacyBookingBridgeService
             ->get();
         $currentPivotIds = $rows->pluck('id')->map(fn ($id): int => (int) $id)->all();
 
-        $stale = ChildSessionBooking::query()
+        $staleBase = ChildSessionBooking::query()
             ->where('legacy_class_session_id', $session->id);
 
         if ($currentPivotIds !== []) {
-            $stale->whereNotIn('legacy_class_session_student_id', $currentPivotIds);
+            $staleBase->whereNotIn('legacy_class_session_student_id', $currentPivotIds);
         }
 
-        $stale->update([
-            'status' => 'cancelled',
-            'active_on' => null,
-            'legacy_deleted_at' => now(),
-        ]);
+        (clone $staleBase)
+            ->whereNotIn('status', self::PRESERVED_TERMINAL_STATUSES)
+            ->update([
+                'status' => 'cancelled',
+                'active_on' => null,
+                'legacy_deleted_at' => now(),
+            ]);
+
+        (clone $staleBase)
+            ->whereIn('status', self::PRESERVED_TERMINAL_STATUSES)
+            ->update([
+                'active_on' => null,
+                'legacy_deleted_at' => now(),
+            ]);
 
         foreach ($rows as $row) {
             $this->syncBookingRow(
@@ -173,10 +195,20 @@ class LegacyBookingBridgeService
             return;
         }
 
-        ChildSessionBooking::query()
-            ->where('legacy_class_session_id', $session->id)
+        $base = ChildSessionBooking::query()
+            ->where('legacy_class_session_id', $session->id);
+
+        (clone $base)
+            ->whereNotIn('status', self::PRESERVED_TERMINAL_STATUSES)
             ->update([
                 'status' => 'cancelled',
+                'active_on' => null,
+                'legacy_deleted_at' => now(),
+            ]);
+
+        (clone $base)
+            ->whereIn('status', self::PRESERVED_TERMINAL_STATUSES)
+            ->update([
                 'active_on' => null,
                 'legacy_deleted_at' => now(),
             ]);
@@ -229,23 +261,56 @@ class LegacyBookingBridgeService
             $occurrence = app(LegacySessionBridgeService::class)->syncOccurrence($session);
         }
 
-        $cancelled = $session->status === 'cancelled';
+        $booking = ChildSessionBooking::query()
+            ->where('legacy_class_session_student_id', $pivotId)
+            ->first();
 
-        return ChildSessionBooking::query()->updateOrCreate(
-            ['legacy_class_session_student_id' => $pivotId],
-            [
-                'student_id' => $studentId,
-                'session_occurrence_id' => $occurrence->id,
-                'booking_type' => 'regular',
-                'status' => $cancelled ? 'session_cancelled' : 'scheduled',
-                'active_on' => $cancelled ? null : $session->session_date?->toDateString(),
-                'source_type' => 'legacy',
-                'created_by' => null,
-                'legacy_class_session_id' => $session->id,
-                'legacy_deleted_at' => null,
-                'created_at' => $createdAt,
-                'updated_at' => $updatedAt,
-            ]
-        );
+        if (! $booking) {
+            $booking = ChildSessionBooking::query()
+                ->where('student_id', $studentId)
+                ->where('session_occurrence_id', $occurrence->id)
+                ->whereNull('legacy_class_session_student_id')
+                ->where('source_type', 'movement')
+                ->latest('id')
+                ->first();
+        }
+
+        $cancelled = $session->status === 'cancelled';
+        $preserveTerminal = $booking
+            && in_array($booking->status, self::PRESERVED_TERMINAL_STATUSES, true);
+        $status = $preserveTerminal
+            ? $booking->status
+            : ($cancelled ? 'session_cancelled' : 'scheduled');
+
+        $payload = [
+            'student_id' => $studentId,
+            'session_occurrence_id' => $occurrence->id,
+            'status' => $status,
+            'active_on' => $status === 'scheduled' ? $session->session_date?->toDateString() : null,
+            'legacy_class_session_student_id' => $pivotId,
+            'legacy_class_session_id' => $session->id,
+            'legacy_deleted_at' => null,
+        ];
+
+        if ($booking) {
+            if ($booking->source_type !== 'movement') {
+                $payload['booking_type'] = 'regular';
+                $payload['source_type'] = 'legacy';
+                $payload['created_by'] = null;
+            }
+
+            $booking->forceFill($payload)->save();
+
+            return $booking;
+        }
+
+        return ChildSessionBooking::query()->create([
+            ...$payload,
+            'booking_type' => 'regular',
+            'source_type' => 'legacy',
+            'created_by' => null,
+            'created_at' => $createdAt,
+            'updated_at' => $updatedAt,
+        ]);
     }
 }
