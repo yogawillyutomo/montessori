@@ -45,7 +45,7 @@ class ObservationController extends Controller
             foreach ($validated['observations'] as $indicatorId => $row) {
                 $indicator = Indicator::query()->findOrFail((int) $indicatorId);
                 $level = $this->normalizeObservationLevel($row['status']);
-                $needsFollowUp = $level === 'emerging' || $row['status'] === 'needs_support';
+                $needsFollowUp = $row['status'] === 'needs_support';
 
                 $observation = Observation::query()->create([
                     'class_session_id' => $classSession->id,
