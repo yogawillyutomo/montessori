@@ -9,11 +9,23 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Validation\ValidationException;
 
 #[Fillable(['school_class_id', 'guardian_id', 'code', 'name', 'gender', 'birth_place', 'birth_date', 'status', 'medical_notes'])]
 class Student extends Model
 {
     use HasFactory;
+
+    protected static function booted(): void
+    {
+        static::deleting(function (Student $student): void {
+            if ($student->childEnrollments()->exists()) {
+                throw ValidationException::withMessages([
+                    'student' => 'Siswa tidak bisa dihapus karena sudah memiliki histori enrollment. Nonaktifkan siswa sebagai gantinya.',
+                ]);
+            }
+        });
+    }
 
     protected function casts(): array
     {
