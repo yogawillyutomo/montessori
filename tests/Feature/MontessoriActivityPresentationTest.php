@@ -6,6 +6,7 @@ use App\Models\ChildGuideResponsibility;
 use App\Models\ChildSessionBooking;
 use App\Models\DevelopmentArea;
 use App\Models\MontessoriActivity;
+use App\Models\Presentation;
 use App\Models\SchoolClass;
 use App\Models\SessionOccurrence;
 use App\Models\Student;
@@ -39,10 +40,11 @@ class MontessoriActivityPresentationTest extends TestCase
             'teacher_id' => $teacher->id,
             'montessori_activity_id' => $activity->id,
             'session_occurrence_id' => null,
-            'presented_on' => now()->toDateString(),
             'presentation_type' => 'initial',
             'recorded_by' => $user->id,
         ]);
+        $presentation = Presentation::query()->sole();
+        $this->assertSame(now()->toDateString(), $presentation->presented_on->toDateString());
         $this->assertDatabaseCount('observations', 0);
         $this->assertDatabaseCount('ilp_plans', 0);
     }
