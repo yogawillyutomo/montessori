@@ -128,6 +128,9 @@ class BookingRescheduleService
             $destinationBooking = ChildSessionBooking::query()->create([
                 'student_id' => $source->student_id,
                 'child_enrollment_id' => $source->child_enrollment_id,
+                'session_credit_id' => $source->session_credit_id,
+                'credit_allocated_by' => $source->credit_allocated_by,
+                'credit_allocated_at' => $source->credit_allocated_at,
                 'session_occurrence_id' => $destination->id,
                 'booking_type' => 'rescheduled',
                 'status' => 'scheduled',

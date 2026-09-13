@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Validation\ValidationException;
 use LogicException;
 
@@ -159,6 +160,11 @@ class EnrollmentPlanAssignment extends Model
     public function sessionPlan(): BelongsTo
     {
         return $this->belongsTo(SessionPlan::class);
+    }
+
+    public function entitlementPeriods(): HasMany
+    {
+        return $this->hasMany(EntitlementPeriod::class);
     }
 
     public function createdBy(): BelongsTo

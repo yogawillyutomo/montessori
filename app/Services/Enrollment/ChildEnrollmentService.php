@@ -6,6 +6,7 @@ use App\Models\ChildEnrollment;
 use App\Models\ChildSessionBooking;
 use App\Models\ClassLevel;
 use App\Models\EnrollmentPlanAssignment;
+use App\Models\EntitlementPeriod;
 use App\Models\RecurringSchedule;
 use App\Models\Student;
 use App\Models\User;
@@ -265,6 +266,29 @@ class ChildEnrollmentService
         User $actor,
         string $reason,
     ): void {
+        $futurePeriods = EntitlementPeriod::query()
+            ->where('child_enrollment_id', $enrollment->id)
+            ->whereDate('period_start', '>', $endDate->toDateString())
+            ->where('status', '!=', 'cancelled')
+            ->orderBy('period_start')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($futurePeriods as $period) {
+            if ($period->status !== 'open' || $period->committedCreditCount() > 0) {
+                throw ValidationException::withMessages([
+                    'entitlement_period' => 'Masih ada future entitlement period yang sudah final atau memiliki committed credit. Rekonsiliasi entitlement terlebih dahulu.',
+                ]);
+            }
+
+            $period->forceFill([
+                'status' => 'cancelled',
+                'cancellation_reason' => $reason,
+                'cancelled_by' => $actor->id,
+                'cancelled_at' => now(),
+            ])->save();
+        }
+
         $assignments = EnrollmentPlanAssignment::query()
             ->where('child_enrollment_id', $enrollment->id)
             ->whereNull('cancelled_at')

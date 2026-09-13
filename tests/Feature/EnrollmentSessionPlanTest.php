@@ -6,6 +6,7 @@ use App\Models\ChildEnrollment;
 use App\Models\ChildSessionBooking;
 use App\Models\ClassLevel;
 use App\Models\EnrollmentPlanAssignment;
+use App\Models\EntitlementPeriod;
 use App\Models\RecurringSchedule;
 use App\Models\SessionOccurrence;
 use App\Models\SessionPlan;
@@ -63,7 +64,7 @@ class EnrollmentSessionPlanTest extends TestCase
         $this->assertSame('default', $assignment->assignment_type);
         $this->assertSame('2026-09-20', $assignment->valid_from->toDateString());
         $this->assertNull($assignment->valid_until);
-        $this->assertFalse(\Schema::hasTable('entitlement_periods'));
+        $this->assertSame(0, EntitlementPeriod::query()->count());
     }
 
     public function test_custom_plan_override_requires_authorized_actor_and_reason(): void
