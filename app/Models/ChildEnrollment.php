@@ -173,6 +173,11 @@ class ChildEnrollment extends Model
         return $this->hasMany(EnrollmentPlanAssignment::class)->orderBy('valid_from');
     }
 
+    public function entitlementPeriods(): HasMany
+    {
+        return $this->hasMany(EntitlementPeriod::class)->orderBy('period_start');
+    }
+
     public function recurringSchedules(): HasMany
     {
         return $this->hasMany(RecurringSchedule::class);
