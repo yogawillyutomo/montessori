@@ -65,15 +65,17 @@ class ClassSession extends Model
     public function attendanceRecap(): array
     {
         $attendances = $this->attendances;
+        $unmarkedCount = $attendances->where('status', 'unmarked')->count();
+        $missingRows = max(0, $this->students->count() - $attendances->count());
 
         return [
             'total' => $this->students->count(),
-            'present' => $attendances->where('marked_at', '!=', null)->where('status', 'present')->count(),
-            'excused' => $attendances->where('marked_at', '!=', null)->where('status', 'excused')->count(),
-            'sick' => $attendances->where('marked_at', '!=', null)->where('status', 'sick')->count(),
-            'absent' => $attendances->where('marked_at', '!=', null)->where('status', 'absent')->count(),
-            'late' => $attendances->where('marked_at', '!=', null)->where('status', 'late')->count(),
-            'unmarked' => max(0, $this->students->count() - $attendances->where('marked_at', '!=', null)->count()),
+            'present' => $attendances->where('status', 'present')->count(),
+            'excused' => $attendances->where('status', 'excused')->count(),
+            'sick' => $attendances->where('status', 'sick')->count(),
+            'absent' => $attendances->where('status', 'absent')->count(),
+            'late' => $attendances->where('status', 'late')->count(),
+            'unmarked' => $unmarkedCount + $missingRows,
         ];
     }
 }
