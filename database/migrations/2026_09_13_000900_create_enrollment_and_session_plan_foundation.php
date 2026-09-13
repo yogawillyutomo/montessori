@@ -56,10 +56,14 @@ return new class extends Migration
             $table->string('assignment_type')->default('default');
             $table->text('reason')->nullable();
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->timestamp('cancelled_at')->nullable();
+            $table->foreignId('cancelled_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->text('cancellation_reason')->nullable();
             $table->timestamps();
 
             $table->index(['child_enrollment_id', 'valid_from', 'valid_until'], 'enrollment_plan_effective_dates');
             $table->index(['session_plan_id', 'valid_from']);
+            $table->index(['child_enrollment_id', 'cancelled_at']);
         });
 
         Schema::table('recurring_schedules', function (Blueprint $table): void {
