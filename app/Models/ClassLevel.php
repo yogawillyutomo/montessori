@@ -6,11 +6,23 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Validation\ValidationException;
 
 #[Fillable(['name', 'slug', 'sequence', 'min_age_months', 'max_age_months', 'color', 'is_active'])]
 class ClassLevel extends Model
 {
     use HasFactory;
+
+    protected static function booted(): void
+    {
+        static::deleting(function (ClassLevel $level): void {
+            if ($level->childEnrollments()->exists() || $level->sessionPlans()->exists()) {
+                throw ValidationException::withMessages([
+                    'class_level' => 'Program/level tidak bisa dihapus karena sudah memiliki enrollment atau session plan. Nonaktifkan sebagai gantinya.',
+                ]);
+            }
+        });
+    }
 
     protected function casts(): array
     {
