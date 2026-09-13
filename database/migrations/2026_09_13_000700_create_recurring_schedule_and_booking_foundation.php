@@ -4,7 +4,6 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use RuntimeException;
 
 return new class extends Migration
 {
@@ -76,6 +75,20 @@ return new class extends Migration
             );
         }
 
+        $scheduleOverflow = DB::table('student_weekly_schedule as sws')
+            ->join('weekly_schedules as ws', 'ws.id', '=', 'sws.weekly_schedule_id')
+            ->whereNotNull('ws.capacity')
+            ->select('ws.id', 'ws.capacity', DB::raw('COUNT(*) as aggregate'))
+            ->groupBy('ws.id', 'ws.capacity')
+            ->havingRaw('COUNT(*) > ws.capacity')
+            ->first();
+
+        if ($scheduleOverflow) {
+            throw new RuntimeException(
+                "Cannot migrate recurring schedules: legacy weekly schedule {$scheduleOverflow->id} exceeds capacity {$scheduleOverflow->capacity}."
+            );
+        }
+
         $duplicateBooking = DB::table('class_session_student as css')
             ->join('class_sessions as cs', 'cs.id', '=', 'css.class_session_id')
             ->where('cs.status', '!=', 'cancelled')
@@ -87,6 +100,21 @@ return new class extends Migration
         if ($duplicateBooking) {
             throw new RuntimeException(
                 "Cannot migrate bookings: student {$duplicateBooking->student_id} has multiple active legacy sessions on {$duplicateBooking->session_date}."
+            );
+        }
+
+        $sessionOverflow = DB::table('class_session_student as css')
+            ->join('class_sessions as cs', 'cs.id', '=', 'css.class_session_id')
+            ->where('cs.status', '!=', 'cancelled')
+            ->whereNotNull('cs.capacity')
+            ->select('cs.id', 'cs.capacity', DB::raw('COUNT(*) as aggregate'))
+            ->groupBy('cs.id', 'cs.capacity')
+            ->havingRaw('COUNT(*) > cs.capacity')
+            ->first();
+
+        if ($sessionOverflow) {
+            throw new RuntimeException(
+                "Cannot migrate bookings: legacy class session {$sessionOverflow->id} exceeds capacity {$sessionOverflow->capacity}."
             );
         }
     }
