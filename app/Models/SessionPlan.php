@@ -95,8 +95,8 @@ class SessionPlan extends Model
         });
 
         static::deleting(function (SessionPlan $plan): void {
-            if ($plan->assignments()->exists()) {
-                throw new LogicException('Session plan yang sudah memiliki assignment tidak boleh dihapus. Nonaktifkan plan sebagai gantinya.');
+            if ($plan->assignments()->exists() || $plan->entitlementPeriods()->exists()) {
+                throw new LogicException('Session plan yang sudah memiliki assignment atau entitlement period tidak boleh dihapus. Nonaktifkan plan sebagai gantinya.');
             }
         });
     }
@@ -121,5 +121,10 @@ class SessionPlan extends Model
     public function assignments(): HasMany
     {
         return $this->hasMany(EnrollmentPlanAssignment::class);
+    }
+
+    public function entitlementPeriods(): HasMany
+    {
+        return $this->hasMany(EntitlementPeriod::class);
     }
 }
