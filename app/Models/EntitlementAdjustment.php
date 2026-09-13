@@ -49,6 +49,12 @@ class EntitlementAdjustment extends Model
                         'reversal_of_adjustment_id' => 'Reversal harus membalik adjustment pada entitlement period yang sama dengan delta kebalikan.',
                     ]);
                 }
+
+                if ($reversed->reversal_of_adjustment_id !== null || $reversed->reversals()->exists()) {
+                    throw ValidationException::withMessages([
+                        'reversal_of_adjustment_id' => 'Adjustment hanya boleh direversal satu kali dan reversal tidak dapat direversal kembali.',
+                    ]);
+                }
             }
         });
 
@@ -87,5 +93,15 @@ class EntitlementAdjustment extends Model
     public function reversals(): HasMany
     {
         return $this->hasMany(self::class, 'reversal_of_adjustment_id');
+    }
+
+    public function createdCredits(): HasMany
+    {
+        return $this->hasMany(SessionCredit::class, 'source_adjustment_id');
+    }
+
+    public function voidedCredits(): HasMany
+    {
+        return $this->hasMany(SessionCredit::class, 'voided_by_adjustment_id');
     }
 }
