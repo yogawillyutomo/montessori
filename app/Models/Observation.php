@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable(['class_session_id', 'student_id', 'indicator_id', 'development_area_id', 'teacher_id', 'observation_type', 'observed_on', 'level', 'status', 'score', 'note', 'needs_follow_up', 'include_in_report'])]
 class Observation extends Model
@@ -75,6 +76,11 @@ class Observation extends Model
     public function teacher(): BelongsTo
     {
         return $this->belongsTo(Teacher::class);
+    }
+
+    public function followUpCandidate(): HasOne
+    {
+        return $this->hasOne(FollowUpCandidate::class, 'source_observation_id');
     }
 
     public function getStatusLabelAttribute(): string
