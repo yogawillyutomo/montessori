@@ -1,6 +1,6 @@
 # Montessori Bloom — Business Documentation
 
-Status: **Business baseline / pre-implementation**  
+Status: **Business baseline / architecture planning**  
 Last reviewed: **2026-09-13**
 
 This directory contains the current business and domain baseline for Montessori Bloom. The purpose of these documents is to make the software follow the real operating model of the school instead of forcing school operations into the current implementation.
@@ -45,6 +45,29 @@ Operational modules such as schedule, session, attendance, enrollment, package a
    - guide confirmation
    - children joining mid-period
    - insufficient evidence handling
+
+5. [Alpha to Business Baseline Gap Analysis](./05-alpha-to-business-baseline-gap-analysis.md)
+   - current alpha model inventory
+   - keep/evolve/add/deprecate decisions
+   - scheduling, entitlement, pedagogy and reporting gaps
+   - security/authorization gaps
+   - expand-and-contract migration philosophy
+
+6. [Target Domain Model & ERD v1](./06-target-domain-model-erd-v1.md)
+   - target bounded domains
+   - target entity relationships
+   - proposed scheduling/booking/entitlement model
+   - presentation, observation and development progress separation
+   - report policy, eligibility and immutable versioning
+   - target authorization inputs and database invariants
+
+7. [Migration Roadmap v1](./07-migration-roadmap-v1.md)
+   - staged M0–M17 migration sequence
+   - backfill and compatibility strategy
+   - reconciliation requirements
+   - release grouping
+   - testing strategy
+   - next implementation branch
 
 ## Core separations
 
@@ -93,10 +116,45 @@ Progress Report
 - Attendance does **not** need to be recorded in real time.
 - Attendance may be entered at the end of a session, at the end of the day, or later.
 - There is **no automatic attendance deadline**.
-- `UNMARKED` must never be treated as `ABSENT`.
+- `UNMARKED` must never be treated as `ABSENT` or silently as `PRESENT`.
 - Program session entitlement is configurable; examples include **Infant 8 sessions/month** and **Glow 4 sessions/month**.
 - A child joining mid-period may participate and accumulate observations immediately while still being **not yet eligible for a progress report**.
 - Initial report eligibility may require **2–3 months or another configurable period**, combined with actual attended sessions and guide confirmation.
+
+## Current architecture decision
+
+Montessori Bloom remains a **modular Laravel monolith**.
+
+The migration uses an expand-and-contract approach:
+
+```text
+SECURE
+  -> EXPAND
+  -> BACKFILL
+  -> COMPATIBILITY
+  -> CUTOVER
+  -> VERIFY
+  -> CONTRACT
+```
+
+Existing alpha data must be preserved while target structures are introduced.
+
+## Next implementation priority
+
+The next code tranche after this architecture baseline is accepted is:
+
+```text
+fix/m0-security-hardening
+```
+
+The first implementation tranche should focus on security/correctness only before scheduling schema refactors:
+
+- prevent teacher child-scope escalation through session mutation;
+- harden report state/publication authorization;
+- make demo seeding production-safe;
+- remove fail-open admin-role defaults safely;
+- add login throttling;
+- add regression tests for these invariants.
 
 ## Change policy
 
