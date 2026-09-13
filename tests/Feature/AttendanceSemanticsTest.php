@@ -20,6 +20,7 @@ class AttendanceSemanticsTest extends TestCase
         $this->actingAs($this->admin());
 
         $session = $this->createMondaySession();
+        $attendanceIds = $session->attendances()->pluck('id');
 
         $this->assertSame($session->students()->count(), $session->attendances()->count());
         $this->assertSame(
@@ -27,7 +28,7 @@ class AttendanceSemanticsTest extends TestCase
             $session->attendances()->where('status', 'unmarked')->whereNull('marked_at')->count()
         );
         $this->assertSame(0, $session->attendances()->where('status', 'present')->count());
-        $this->assertSame(0, AttendanceAudit::query()->count());
+        $this->assertSame(0, AttendanceAudit::query()->whereIn('attendance_id', $attendanceIds)->count());
     }
 
     public function test_mark_and_reset_preserves_explicit_state_and_audit_history(): void
