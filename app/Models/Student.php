@@ -106,6 +106,11 @@ class Student extends Model
         return $this->hasMany(Observation::class);
     }
 
+    public function followUpCandidates(): HasMany
+    {
+        return $this->hasMany(FollowUpCandidate::class);
+    }
+
     public function ilpPlans(): HasMany
     {
         return $this->hasMany(IlpPlan::class);
