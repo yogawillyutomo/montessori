@@ -39,6 +39,12 @@ class ChildBookingCancellationService
                 ]);
             }
 
+            if ($locked->session_credit_id !== null) {
+                throw ValidationException::withMessages([
+                    'booking_id' => 'Booking yang sudah memiliki session credit tidak boleh dibatalkan tanpa entitlement reconciliation. Gunakan reschedule, attendance outcome, atau policy cancellation khusus.',
+                ]);
+            }
+
             if ($this->evidence->hasAnyMarkedAttendance($locked) || $this->evidence->hasObservationEvidence($locked)) {
                 throw ValidationException::withMessages([
                     'booking_id' => 'Booking yang sudah memiliki presensi atau observasi tidak boleh dibatalkan sebagai child cancellation.',
