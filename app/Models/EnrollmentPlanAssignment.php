@@ -17,6 +17,9 @@ use LogicException;
     'assignment_type',
     'reason',
     'created_by',
+    'cancelled_at',
+    'cancelled_by',
+    'cancellation_reason',
 ])]
 class EnrollmentPlanAssignment extends Model
 {
@@ -41,6 +44,13 @@ class EnrollmentPlanAssignment extends Model
                 && trim((string) $assignment->reason) === '') {
                 throw ValidationException::withMessages([
                     'reason' => 'Alasan wajib dicatat untuk override atau plan change.',
+                ]);
+            }
+
+            if ($assignment->cancelled_at !== null
+                && ($assignment->cancelled_by === null || trim((string) $assignment->cancellation_reason) === '')) {
+                throw ValidationException::withMessages([
+                    'cancellation_reason' => 'Pembatalan future plan assignment harus memiliki actor dan alasan.',
                 ]);
             }
 
@@ -95,8 +105,13 @@ class EnrollmentPlanAssignment extends Model
                 }
             }
 
+            if ($assignment->cancelled_at !== null) {
+                return;
+            }
+
             $overlap = self::query()
                 ->where('child_enrollment_id', $assignment->child_enrollment_id)
+                ->whereNull('cancelled_at')
                 ->whereDate('valid_from', '<=', $validUntil ?? '9999-12-31')
                 ->where(function ($query) use ($validFrom): void {
                     $query->whereNull('valid_until')
@@ -114,10 +129,11 @@ class EnrollmentPlanAssignment extends Model
 
         static::updating(function (EnrollmentPlanAssignment $assignment): void {
             $dirty = array_keys($assignment->getDirty());
-            $forbidden = array_diff($dirty, ['valid_until']);
+            $allowed = ['valid_until', 'cancelled_at', 'cancelled_by', 'cancellation_reason'];
+            $forbidden = array_diff($dirty, $allowed);
 
             if ($forbidden !== []) {
-                throw new LogicException('Plan assignment bersifat historis; hanya valid_until yang boleh ditutup. Buat assignment baru untuk perubahan plan.');
+                throw new LogicException('Plan assignment bersifat historis; plan/period tidak boleh ditulis ulang. Tutup atau batalkan future assignment secara eksplisit.');
             }
         });
 
@@ -131,6 +147,7 @@ class EnrollmentPlanAssignment extends Model
         return [
             'valid_from' => 'date',
             'valid_until' => 'date',
+            'cancelled_at' => 'datetime',
         ];
     }
 
@@ -147,5 +164,10 @@ class EnrollmentPlanAssignment extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
     }
 }
