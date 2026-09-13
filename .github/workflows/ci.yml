@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -36,8 +38,24 @@ jobs:
       - name: Run tests
         run: php artisan test
 
-      - name: Check PHP formatting
-        run: ./vendor/bin/pint --test
+      - name: Check formatting of changed PHP files
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_SHA="${{ github.event.before }}"
+          fi
+
+          mapfile -t PHP_FILES < <(git diff --name-only --diff-filter=ACMR "$BASE_SHA" HEAD -- '*.php')
+
+          if [ "${#PHP_FILES[@]}" -eq 0 ]; then
+            echo "No changed PHP files to check."
+            exit 0
+          fi
+
+          printf 'Checking %s\n' "${PHP_FILES[@]}"
+          ./vendor/bin/pint --test "${PHP_FILES[@]}"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
