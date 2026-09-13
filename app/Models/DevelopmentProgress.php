@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Validation\ValidationException;
 
 #[Fillable([
     'student_id',
@@ -37,6 +38,21 @@ class DevelopmentProgress extends Model
         'independent',
         'mastered',
     ];
+
+    protected static function booted(): void
+    {
+        static::updating(function (): void {
+            throw ValidationException::withMessages([
+                'development_progress' => 'Histori development progress tidak boleh diubah. Catat judgement baru sebagai histori berikutnya.',
+            ]);
+        });
+
+        static::deleting(function (): void {
+            throw ValidationException::withMessages([
+                'development_progress' => 'Histori development progress tidak boleh dihapus. Catat judgement koreksi sebagai histori baru.',
+            ]);
+        });
+    }
 
     protected function casts(): array
     {
