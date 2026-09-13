@@ -88,9 +88,15 @@ class BookingRescheduleService
                 ]);
             }
 
-            if ($this->evidence->isFulfilled($source)) {
+            if ($this->evidence->hasAnyMarkedAttendance($source)) {
                 throw ValidationException::withMessages([
-                    'source_booking_id' => 'Booking yang sudah memiliki bukti hadir atau observasi tidak boleh dipindahkan.',
+                    'source_booking_id' => 'Booking yang sudah memiliki attendance outcome tidak boleh memakai reschedule biasa. Gunakan workflow makeup atau koreksi attendance.',
+                ]);
+            }
+
+            if ($this->evidence->hasObservationEvidence($source)) {
+                throw ValidationException::withMessages([
+                    'source_booking_id' => 'Booking yang sudah memiliki observasi tidak boleh dipindahkan.',
                 ]);
             }
 
