@@ -58,4 +58,9 @@ class SessionTemplate extends Model
     {
         return $this->hasMany(SessionOccurrence::class);
     }
+
+    public function recurringSchedules(): HasMany
+    {
+        return $this->hasMany(RecurringSchedule::class);
+    }
 }

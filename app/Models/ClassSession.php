@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Alpha\LegacyBookingBridgeService;
 use App\Services\Alpha\LegacySessionBridgeService;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -10,6 +11,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 #[Fillable(['weekly_schedule_id', 'school_class_id', 'teacher_id', 'room', 'capacity', 'session_date', 'starts_at', 'ends_at', 'topic', 'status', 'class_note', 'follow_up_recommendation', 'closed_by', 'closed_at'])]
 class ClassSession extends Model
@@ -18,12 +21,45 @@ class ClassSession extends Model
 
     protected static function booted(): void
     {
+        static::updating(function (ClassSession $session): void {
+            if ($session->status === 'cancelled') {
+                return;
+            }
+
+            $studentIds = $session->students()->pluck('students.id')->map(fn ($id): int => (int) $id)->all();
+            if ($studentIds === []) {
+                return;
+            }
+
+            if ($session->capacity !== null && count($studentIds) > (int) $session->capacity) {
+                throw ValidationException::withMessages([
+                    'capacity' => "Kapasitas sesi ({$session->capacity}) lebih kecil dari jumlah anak yang sudah terdaftar.",
+                ]);
+            }
+
+            $conflict = DB::table('class_session_student as css')
+                ->join('class_sessions as cs', 'cs.id', '=', 'css.class_session_id')
+                ->whereIn('css.student_id', $studentIds)
+                ->whereDate('cs.session_date', $session->session_date->toDateString())
+                ->where('cs.status', '!=', 'cancelled')
+                ->where('cs.id', '!=', $session->id)
+                ->exists();
+
+            if ($conflict) {
+                throw ValidationException::withMessages([
+                    'student_ids' => 'Ada anak yang sudah memiliki sesi aktif lain pada tanggal yang sama.',
+                ]);
+            }
+        });
+
         static::saved(function (ClassSession $session): void {
             app(LegacySessionBridgeService::class)->syncOccurrence($session);
+            app(LegacyBookingBridgeService::class)->syncBookingsForSession($session);
         });
 
         static::deleted(function (ClassSession $session): void {
             app(LegacySessionBridgeService::class)->markOccurrenceLegacyDeleted($session);
+            app(LegacyBookingBridgeService::class)->markBookingsForLegacySessionDeleted($session);
         });
     }
 
@@ -54,7 +90,10 @@ class ClassSession extends Model
 
     public function students(): BelongsToMany
     {
-        return $this->belongsToMany(Student::class, 'class_session_student')->withTimestamps();
+        return $this->belongsToMany(Student::class, 'class_session_student')
+            ->using(ClassSessionStudent::class)
+            ->withPivot('id')
+            ->withTimestamps();
     }
 
     public function sessionOccurrence(): HasOne
