@@ -49,6 +49,11 @@ class Student extends Model
             ->withTimestamps();
     }
 
+    public function childEnrollments(): HasMany
+    {
+        return $this->hasMany(ChildEnrollment::class)->orderBy('starts_on');
+    }
+
     public function recurringSchedules(): HasMany
     {
         return $this->hasMany(RecurringSchedule::class);
