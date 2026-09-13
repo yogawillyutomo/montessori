@@ -99,8 +99,7 @@ class MakeupBookingService
                 ]);
             }
 
-            $schoolCancellationSource = $source->status === 'session_cancelled'
-                && $lockedEligibility->reason_category === 'school_cancel';
+            $schoolCancellationSource = $source->status === 'session_cancelled';
 
             if (! $schoolCancellationSource) {
                 if ($source->status !== 'scheduled') {
