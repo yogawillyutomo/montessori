@@ -158,21 +158,27 @@ class SessionTemplateOccurrenceTest extends TestCase
         $this->assertNotNull($occurrence->legacy_deleted_at);
         $this->assertNotNull($occurrence->legacy_class_session_id);
 
-        $schedule = WeeklySchedule::query()
-            ->doesntHave('classSessions')
-            ->first();
+        $sourceSchedule = WeeklySchedule::query()->firstOrFail();
+        $schedule = WeeklySchedule::query()->create([
+            'school_class_id' => $sourceSchedule->school_class_id,
+            'teacher_id' => $sourceSchedule->teacher_id,
+            'room' => 'Disposable Room',
+            'capacity' => 2,
+            'day_of_week' => 6,
+            'starts_at' => '16:00',
+            'ends_at' => '17:00',
+            'topic' => 'Disposable legacy slot',
+            'is_active' => true,
+        ]);
+        $templateId = SessionTemplate::query()
+            ->where('legacy_weekly_schedule_id', $schedule->id)
+            ->value('id');
 
-        if ($schedule) {
-            $templateId = SessionTemplate::query()
-                ->where('legacy_weekly_schedule_id', $schedule->id)
-                ->value('id');
+        $schedule->delete();
 
-            $schedule->delete();
-
-            $template = SessionTemplate::query()->findOrFail($templateId);
-            $this->assertFalse($template->is_active);
-            $this->assertNotNull($template->legacy_deleted_at);
-            $this->assertNotNull($template->legacy_weekly_schedule_id);
-        }
+        $template = SessionTemplate::query()->findOrFail($templateId);
+        $this->assertFalse($template->is_active);
+        $this->assertNotNull($template->legacy_deleted_at);
+        $this->assertNotNull($template->legacy_weekly_schedule_id);
     }
 }
