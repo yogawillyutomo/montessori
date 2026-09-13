@@ -46,6 +46,22 @@ class EntitlementPeriod extends Model
     protected static function booted(): void
     {
         static::saving(function (EntitlementPeriod $period): void {
+            if ($period->exists) {
+                $originalStatus = (string) $period->getOriginal('status');
+                if (in_array($originalStatus, ['closed', 'cancelled'], true)
+                    && $period->isDirty('status')) {
+                    throw new LogicException('Entitlement period CLOSED/CANCELLED adalah state final dan tidak boleh dibuka kembali.');
+                }
+
+                $dirty = array_keys($period->getDirty());
+                $allowed = ['status', 'cancellation_reason', 'cancelled_by', 'cancelled_at'];
+                $forbidden = array_diff($dirty, $allowed);
+
+                if ($forbidden !== []) {
+                    throw new LogicException('Entitlement period adalah snapshot historis; quantity, plan, dan periodenya tidak boleh ditulis ulang. Gunakan adjustment ledger.');
+                }
+            }
+
             if (! in_array($period->status, self::STATUSES, true)) {
                 throw ValidationException::withMessages([
                     'status' => 'Status entitlement period tidak valid.',
@@ -143,22 +159,6 @@ class EntitlementPeriod extends Model
                 $period->cancellation_reason = null;
                 $period->cancelled_by = null;
                 $period->cancelled_at = null;
-            }
-        });
-
-        static::updating(function (EntitlementPeriod $period): void {
-            $originalStatus = (string) $period->getOriginal('status');
-            if (in_array($originalStatus, ['closed', 'cancelled'], true)
-                && $period->isDirty('status')) {
-                throw new LogicException('Entitlement period CLOSED/CANCELLED adalah state final dan tidak boleh dibuka kembali.');
-            }
-
-            $dirty = array_keys($period->getDirty());
-            $allowed = ['status', 'cancellation_reason', 'cancelled_by', 'cancelled_at'];
-            $forbidden = array_diff($dirty, $allowed);
-
-            if ($forbidden !== []) {
-                throw new LogicException('Entitlement period adalah snapshot historis; quantity, plan, dan periodenya tidak boleh ditulis ulang. Gunakan adjustment ledger.');
             }
         });
 
