@@ -197,17 +197,27 @@ class BookingRescheduleService
             $legacySession->students()->attach($destinationBooking->student_id);
         }
 
-        Attendance::query()->firstOrCreate(
+        $destinationBooking->refresh();
+        $attendance = Attendance::query()->firstOrCreate(
             [
                 'class_session_id' => $legacySession->id,
                 'student_id' => $destinationBooking->student_id,
             ],
             [
+                'child_session_booking_id' => $destinationBooking->id,
                 'status' => 'unmarked',
                 'note' => null,
                 'marked_by' => null,
                 'marked_at' => null,
             ]
         );
+
+        if ($attendance->child_session_booking_id === null) {
+            $attendance->forceFill(['child_session_booking_id' => $destinationBooking->id])->save();
+        } elseif ((int) $attendance->child_session_booking_id !== (int) $destinationBooking->id) {
+            throw ValidationException::withMessages([
+                'attendance' => 'Attendance destination sudah terhubung ke booking lain.',
+            ]);
+        }
     }
 }
