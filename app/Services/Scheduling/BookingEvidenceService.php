@@ -10,6 +10,14 @@ class BookingEvidenceService
 {
     public function attendanceFor(ChildSessionBooking $booking): ?Attendance
     {
+        $direct = Attendance::query()
+            ->where('child_session_booking_id', $booking->id)
+            ->first();
+
+        if ($direct) {
+            return $direct;
+        }
+
         if (! $booking->legacy_class_session_id) {
             return null;
         }
