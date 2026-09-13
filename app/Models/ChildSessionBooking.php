@@ -83,13 +83,21 @@ class ChildSessionBooking extends Model
                 }
 
                 $credit = SessionCredit::query()->with('entitlementPeriod')->find($booking->session_credit_id);
+                $creditAlreadyLinked = $booking->exists
+                    && $booking->getOriginal('session_credit_id') !== null
+                    && (int) $booking->getOriginal('session_credit_id') === (int) $booking->session_credit_id;
+                $creditStatusAllowed = $credit
+                    && ($creditAlreadyLinked
+                        ? in_array($credit->status, ['booked', 'used', 'forfeited'], true)
+                        : $credit->status === 'booked');
+
                 if (! $credit
                     || $credit->voided_at !== null
-                    || ! in_array($credit->status, ['available', 'booked'], true)
+                    || ! $creditStatusAllowed
                     || ! $credit->entitlementPeriod
                     || (int) $credit->entitlementPeriod->child_enrollment_id !== (int) $booking->child_enrollment_id) {
                     throw ValidationException::withMessages([
-                        'session_credit_id' => 'Session credit tidak valid, sudah di-void/settled, atau bukan milik enrollment booking.',
+                        'session_credit_id' => 'Session credit tidak valid, di-void, berada pada state yang tidak sesuai, atau bukan milik enrollment booking.',
                     ]);
                 }
 
