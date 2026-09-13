@@ -2,17 +2,30 @@
 
 namespace App\Models;
 
+use App\Services\Alpha\LegacySessionBridgeService;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable(['weekly_schedule_id', 'school_class_id', 'teacher_id', 'room', 'capacity', 'session_date', 'starts_at', 'ends_at', 'topic', 'status', 'class_note', 'follow_up_recommendation', 'closed_by', 'closed_at'])]
 class ClassSession extends Model
 {
     use HasFactory;
+
+    protected static function booted(): void
+    {
+        static::saved(function (ClassSession $session): void {
+            app(LegacySessionBridgeService::class)->syncOccurrence($session);
+        });
+
+        static::deleted(function (ClassSession $session): void {
+            app(LegacySessionBridgeService::class)->markOccurrenceLegacyDeleted($session);
+        });
+    }
 
     protected function casts(): array
     {
@@ -42,6 +55,11 @@ class ClassSession extends Model
     public function students(): BelongsToMany
     {
         return $this->belongsToMany(Student::class, 'class_session_student')->withTimestamps();
+    }
+
+    public function sessionOccurrence(): HasOne
+    {
+        return $this->hasOne(SessionOccurrence::class, 'legacy_class_session_id');
     }
 
     public function attendances(): HasMany
