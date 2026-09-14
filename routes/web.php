@@ -84,6 +84,7 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/process/attendance', [ProcessController::class, 'sessions'])->name('alpha.process.attendance');
         Route::get('/process/sessions', [ProcessController::class, 'sessions'])->name('alpha.process.sessions');
         Route::get('/process/observations', [ProcessController::class, 'observations'])->name('alpha.process.observations');
+        Route::get('/process/follow-up', [FollowUpCandidateController::class, 'index'])->name('alpha.process.follow-up');
         Route::get('/process/ilp', [ProcessController::class, 'ilp'])->name('alpha.process.ilp');
     });
 
