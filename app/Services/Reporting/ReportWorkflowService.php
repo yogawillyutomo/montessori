@@ -357,14 +357,13 @@ class ReportWorkflowService
 
     private function assertEligible(Report $report): ReportEligibility
     {
-        $eligibility = ReportEligibility::query()
-            ->where('report_cycle_id', $report->report_cycle_id)
-            ->where('child_enrollment_id', $report->child_enrollment_id)
-            ->first();
+        $enrollment = $report->childEnrollment()->firstOrFail();
+        $cycle = $report->reportCycle()->firstOrFail();
+        $eligibility = $this->eligibilities->evaluate($enrollment, $cycle);
 
-        if (! $eligibility || $eligibility->status !== 'eligible') {
+        if ($eligibility->status !== 'eligible') {
             throw ValidationException::withMessages([
-                'eligibility' => 'Report workflow tidak dapat dilanjutkan tanpa eligibility berstatus ELIGIBLE.',
+                'eligibility' => 'Report workflow tidak dapat dilanjutkan tanpa eligibility berstatus ELIGIBLE berdasarkan evaluasi terbaru.',
             ]);
         }
 
