@@ -9,6 +9,7 @@ use App\Models\SchoolClass;
 use App\Models\WeeklySchedule;
 use App\Services\Alpha\AccessScopeService;
 use App\Services\Scheduling\SessionWriteService;
+use App\Support\Alpha\Role;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -112,10 +113,15 @@ class SessionController extends Controller
 
     private function authorizeTeacherSchedule(Request $request, WeeklySchedule $schedule): void
     {
-        $teacher = app(AccessScopeService::class)->teacherFor($request->user());
-        if (! $teacher) {
+        $user = $request->user();
+        abort_if(! $user, 403);
+
+        if ($user->role !== Role::TEACHER) {
             return;
         }
+
+        $teacher = app(AccessScopeService::class)->teacherFor($user);
+        abort_if(! $teacher, 403);
 
         $ownership = $this->sessionWrites->scheduleOwnership($schedule);
         abort_if($ownership['teacher_id'] === null || $ownership['teacher_id'] !== (int) $teacher->id, 403);
@@ -123,10 +129,15 @@ class SessionController extends Controller
 
     private function authorizeTeacherSession(Request $request, ClassSession $classSession): void
     {
-        $teacher = app(AccessScopeService::class)->teacherFor($request->user());
-        if (! $teacher) {
+        $user = $request->user();
+        abort_if(! $user, 403);
+
+        if ($user->role !== Role::TEACHER) {
             return;
         }
+
+        $teacher = app(AccessScopeService::class)->teacherFor($user);
+        abort_if(! $teacher, 403);
 
         $ownership = $this->sessionWrites->ownership($classSession);
         abort_if($ownership['teacher_id'] === null || $ownership['teacher_id'] !== (int) $teacher->id, 403);
