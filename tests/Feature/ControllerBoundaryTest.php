@@ -8,6 +8,7 @@ use App\Http\Controllers\Alpha\ClassStructureController;
 use App\Http\Controllers\Alpha\IlpController;
 use App\Http\Controllers\Alpha\ProcessPageController;
 use App\Http\Controllers\Alpha\SessionController;
+use App\Http\Controllers\Alpha\StudentGuardianController;
 use App\Http\Controllers\Alpha\WeeklyScheduleController;
 use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
@@ -124,6 +125,26 @@ class ControllerBoundaryTest extends TestCase
             'alpha.master.levels.update' => ClassStructureController::class.'@updateLevel',
             'alpha.master.levels.toggle' => ClassStructureController::class.'@toggleLevel',
             'alpha.master.levels.destroy' => ClassStructureController::class.'@destroyLevel',
+        ];
+
+        foreach ($expected as $routeName => $action) {
+            $route = Route::getRoutes()->getByName($routeName);
+
+            $this->assertNotNull($route, "Route {$routeName} harus tetap tersedia.");
+            $this->assertSame($action, $route->getActionName());
+        }
+    }
+
+    public function test_student_and_guardian_mutations_use_dedicated_controller(): void
+    {
+        $expected = [
+            'alpha.master.students.store' => StudentGuardianController::class.'@storeStudent',
+            'alpha.master.students.import' => StudentGuardianController::class.'@importStudents',
+            'alpha.master.students.update' => StudentGuardianController::class.'@updateStudent',
+            'alpha.master.students.toggle' => StudentGuardianController::class.'@toggleStudent',
+            'alpha.master.students.destroy' => StudentGuardianController::class.'@destroyStudent',
+            'alpha.master.guardians.update' => StudentGuardianController::class.'@updateGuardian',
+            'alpha.master.guardians.destroy' => StudentGuardianController::class.'@destroyGuardian',
         ];
 
         foreach ($expected as $routeName => $action) {
