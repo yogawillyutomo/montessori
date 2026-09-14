@@ -80,9 +80,10 @@ class TargetSessionValidator
         if ($booking->session_credit_id !== null
             || $this->evidence->hasAnyMarkedAttendance($booking)
             || $this->evidence->hasObservationEvidence($booking)
+            || $this->evidence->hasPresentationEvidence($booking)
             || $hasMovement) {
             throw ValidationException::withMessages([
-                'student_ids' => 'Booking yang sudah memiliki credit, movement, attendance, atau observation evidence tidak boleh dikeluarkan dari roster.',
+                'student_ids' => 'Booking yang sudah memiliki credit, movement, attendance, observation, atau presentation evidence tidak boleh dikeluarkan dari roster.',
             ]);
         }
     }
