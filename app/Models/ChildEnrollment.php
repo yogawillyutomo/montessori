@@ -188,6 +188,11 @@ class ChildEnrollment extends Model
         return $this->hasMany(ChildSessionBooking::class);
     }
 
+    public function reportEligibilities(): HasMany
+    {
+        return $this->hasMany(ReportEligibility::class)->orderBy('evaluated_at');
+    }
+
     public function coversDate(string $date): bool
     {
         return $this->starts_on->toDateString() <= $date

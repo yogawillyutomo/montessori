@@ -10,6 +10,7 @@ use App\Http\Controllers\Alpha\ObservationController;
 use App\Http\Controllers\Alpha\PresentationController;
 use App\Http\Controllers\Alpha\ProcessController;
 use App\Http\Controllers\Alpha\ReportController;
+use App\Http\Controllers\Alpha\ReportEligibilityController;
 use App\Http\Controllers\Alpha\SettingController;
 use App\Http\Middleware\EnsureTeacherSessionMutationScope;
 use Illuminate\Support\Facades\Route;
@@ -107,6 +108,8 @@ Route::middleware('auth')->group(function (): void {
         Route::patch('/process/ilp/{ilpPlan}', [ProcessController::class, 'updateIlp'])->name('alpha.process.ilp.update');
         Route::post('/reports/generate', [ReportController::class, 'generate'])->name('alpha.reports.generate');
         Route::post('/reports/students/{student}/draft', [ReportController::class, 'buildStudentDraft'])->name('alpha.reports.students.draft');
+        Route::post('/reports/cycles/{reportCycle}/students/{student}/eligibility', [ReportEligibilityController::class, 'evaluate'])->name('alpha.report-eligibility.evaluate');
+        Route::post('/report-eligibilities/{reportEligibility}/confirm', [ReportEligibilityController::class, 'confirm'])->name('alpha.report-eligibility.confirm');
     });
 
     Route::middleware('role:super_admin,admin,teacher,principal,parent')->group(function (): void {
@@ -121,6 +124,7 @@ Route::middleware('auth')->group(function (): void {
     });
 
     Route::middleware('role:super_admin,admin')->group(function (): void {
+        Route::post('/report-eligibilities/{reportEligibility}/override', [ReportEligibilityController::class, 'override'])->name('alpha.report-eligibility.override');
         Route::patch('/reports/{report}/publish', [ReportController::class, 'publish'])->name('alpha.reports.publish');
     });
 
