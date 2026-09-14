@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\Alpha\AttendanceController;
+use App\Http\Controllers\Alpha\IlpController;
 use App\Http\Controllers\Alpha\ProcessController;
 use App\Http\Controllers\Alpha\SessionController;
 use App\Http\Controllers\Alpha\WeeklyScheduleController;
@@ -59,5 +60,18 @@ class ControllerBoundaryTest extends TestCase
         $this->assertNotNull($sessionIndex);
         $this->assertSame(ProcessController::class.'@sessions', $sessionIndex->getActionName());
         $this->assertSame('process/sessions', $sessionIndex->uri());
+    }
+
+    public function test_ilp_mutation_uses_dedicated_controller_while_ilp_read_route_remains_stable(): void
+    {
+        $update = Route::getRoutes()->getByName('alpha.process.ilp.update');
+        $index = Route::getRoutes()->getByName('alpha.process.ilp');
+
+        $this->assertNotNull($update);
+        $this->assertSame(IlpController::class.'@update', $update->getActionName());
+        $this->assertSame('process/ilp/{ilpPlan}', $update->uri());
+        $this->assertNotNull($index);
+        $this->assertSame(ProcessController::class.'@ilp', $index->getActionName());
+        $this->assertSame('process/ilp', $index->uri());
     }
 }
