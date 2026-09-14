@@ -16,9 +16,11 @@ class ClassLevel extends Model
     protected static function booted(): void
     {
         static::deleting(function (ClassLevel $level): void {
-            if ($level->childEnrollments()->exists() || $level->sessionPlans()->exists()) {
+            if ($level->childEnrollments()->exists()
+                || $level->sessionPlans()->exists()
+                || $level->reportPolicies()->exists()) {
                 throw ValidationException::withMessages([
-                    'class_level' => 'Program/level tidak bisa dihapus karena sudah memiliki enrollment atau session plan. Nonaktifkan sebagai gantinya.',
+                    'class_level' => 'Program/level tidak bisa dihapus karena sudah memiliki enrollment, session plan, atau report policy. Nonaktifkan sebagai gantinya.',
                 ]);
             }
         });
@@ -51,6 +53,11 @@ class ClassLevel extends Model
     public function sessionPlans(): HasMany
     {
         return $this->hasMany(SessionPlan::class);
+    }
+
+    public function reportPolicies(): HasMany
+    {
+        return $this->hasMany(ReportPolicy::class);
     }
 
     public function getAgeRangeLabelAttribute(): string
