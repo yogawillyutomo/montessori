@@ -98,6 +98,12 @@ class MakeupBookingService
                 ]);
             }
 
+            if ($this->evidence->hasPresentationEvidence($source)) {
+                throw ValidationException::withMessages([
+                    'source_booking_id' => 'Booking dengan presentation evidence tidak boleh dipindahkan melalui makeup. Rekonsiliasi attendance/evidence terlebih dahulu.',
+                ]);
+            }
+
             $schoolCancellationSource = $source->status === 'session_cancelled';
 
             if (! $schoolCancellationSource) {
