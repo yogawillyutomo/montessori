@@ -3,6 +3,7 @@
 use App\Http\Controllers\Alpha\AcademicCalendarController;
 use App\Http\Controllers\Alpha\AttendanceController;
 use App\Http\Controllers\Alpha\AuthController;
+use App\Http\Controllers\Alpha\ClassStructureController;
 use App\Http\Controllers\Alpha\CycleReportController;
 use App\Http\Controllers\Alpha\DashboardController;
 use App\Http\Controllers\Alpha\DevelopmentProgressController;
@@ -42,8 +43,8 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/master/curriculum', [MasterController::class, 'curriculum'])->name('alpha.master.curriculum');
         Route::get('/master/import-template/{type}', [MasterController::class, 'downloadImportTemplate'])->name('alpha.master.import-template');
 
-        Route::post('/master/classes', [MasterController::class, 'storeClass'])->name('alpha.master.classes.store');
-        Route::post('/master/levels', [MasterController::class, 'storeLevel'])->name('alpha.master.levels.store');
+        Route::post('/master/classes', [ClassStructureController::class, 'storeClass'])->name('alpha.master.classes.store');
+        Route::post('/master/levels', [ClassStructureController::class, 'storeLevel'])->name('alpha.master.levels.store');
         Route::post('/master/academic-years', [AcademicCalendarController::class, 'storeAcademicYear'])->name('alpha.master.academic-years.store');
         Route::patch('/master/academic-years/{academicYear}', [AcademicCalendarController::class, 'updateAcademicYear'])->name('alpha.master.academic-years.update');
         Route::patch('/master/academic-years/{academicYear}/activate', [AcademicCalendarController::class, 'activateAcademicYear'])->name('alpha.master.academic-years.activate');
@@ -52,13 +53,13 @@ Route::middleware('auth')->group(function (): void {
         Route::patch('/master/terms/{term}', [AcademicCalendarController::class, 'updateTerm'])->name('alpha.master.terms.update');
         Route::patch('/master/terms/{term}/current', [AcademicCalendarController::class, 'activateTerm'])->name('alpha.master.terms.activate');
         Route::delete('/master/terms/{term}', [AcademicCalendarController::class, 'destroyTerm'])->name('alpha.master.terms.destroy');
-        Route::patch('/master/classes/{schoolClass}', [MasterController::class, 'updateClass'])->name('alpha.master.classes.update');
-        Route::post('/master/classes/{schoolClass}/copy', [MasterController::class, 'duplicateClass'])->name('alpha.master.classes.copy');
-        Route::patch('/master/classes/{schoolClass}/toggle', [MasterController::class, 'toggleClass'])->name('alpha.master.classes.toggle');
-        Route::delete('/master/classes/{schoolClass}', [MasterController::class, 'destroyClass'])->name('alpha.master.classes.destroy');
-        Route::patch('/master/levels/{classLevel}', [MasterController::class, 'updateLevel'])->name('alpha.master.levels.update');
-        Route::patch('/master/levels/{classLevel}/toggle', [MasterController::class, 'toggleLevel'])->name('alpha.master.levels.toggle');
-        Route::delete('/master/levels/{classLevel}', [MasterController::class, 'destroyLevel'])->name('alpha.master.levels.destroy');
+        Route::patch('/master/classes/{schoolClass}', [ClassStructureController::class, 'updateClass'])->name('alpha.master.classes.update');
+        Route::post('/master/classes/{schoolClass}/copy', [ClassStructureController::class, 'duplicateClass'])->name('alpha.master.classes.copy');
+        Route::patch('/master/classes/{schoolClass}/toggle', [ClassStructureController::class, 'toggleClass'])->name('alpha.master.classes.toggle');
+        Route::delete('/master/classes/{schoolClass}', [ClassStructureController::class, 'destroyClass'])->name('alpha.master.classes.destroy');
+        Route::patch('/master/levels/{classLevel}', [ClassStructureController::class, 'updateLevel'])->name('alpha.master.levels.update');
+        Route::patch('/master/levels/{classLevel}/toggle', [ClassStructureController::class, 'toggleLevel'])->name('alpha.master.levels.toggle');
+        Route::delete('/master/levels/{classLevel}', [ClassStructureController::class, 'destroyLevel'])->name('alpha.master.levels.destroy');
         Route::post('/master/students', [MasterController::class, 'storeStudent'])->name('alpha.master.students.store');
         Route::post('/master/students/import', [MasterController::class, 'importStudents'])->name('alpha.master.students.import');
         Route::patch('/master/students/{student}', [MasterController::class, 'updateStudent'])->name('alpha.master.students.update');
