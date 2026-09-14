@@ -52,7 +52,7 @@ class ReportVersion extends Model
     public function displayReport(): Report
     {
         $attributes = (array) ($this->snapshot['report'] ?? []);
-        $display = new Report();
+        $display = new Report;
         $display->forceFill($attributes);
         $display->exists = true;
 
