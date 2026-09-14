@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\Alpha\AcademicCalendarController;
 use App\Http\Controllers\Alpha\AttendanceController;
+use App\Http\Controllers\Alpha\ClassStructureController;
 use App\Http\Controllers\Alpha\IlpController;
 use App\Http\Controllers\Alpha\ProcessPageController;
 use App\Http\Controllers\Alpha\SessionController;
@@ -101,6 +102,28 @@ class ControllerBoundaryTest extends TestCase
             'alpha.master.terms.update' => AcademicCalendarController::class.'@updateTerm',
             'alpha.master.terms.activate' => AcademicCalendarController::class.'@activateTerm',
             'alpha.master.terms.destroy' => AcademicCalendarController::class.'@destroyTerm',
+        ];
+
+        foreach ($expected as $routeName => $action) {
+            $route = Route::getRoutes()->getByName($routeName);
+
+            $this->assertNotNull($route, "Route {$routeName} harus tetap tersedia.");
+            $this->assertSame($action, $route->getActionName());
+        }
+    }
+
+    public function test_class_structure_mutations_use_dedicated_controller(): void
+    {
+        $expected = [
+            'alpha.master.classes.store' => ClassStructureController::class.'@storeClass',
+            'alpha.master.classes.update' => ClassStructureController::class.'@updateClass',
+            'alpha.master.classes.copy' => ClassStructureController::class.'@duplicateClass',
+            'alpha.master.classes.toggle' => ClassStructureController::class.'@toggleClass',
+            'alpha.master.classes.destroy' => ClassStructureController::class.'@destroyClass',
+            'alpha.master.levels.store' => ClassStructureController::class.'@storeLevel',
+            'alpha.master.levels.update' => ClassStructureController::class.'@updateLevel',
+            'alpha.master.levels.toggle' => ClassStructureController::class.'@toggleLevel',
+            'alpha.master.levels.destroy' => ClassStructureController::class.'@destroyLevel',
         ];
 
         foreach ($expected as $routeName => $action) {
