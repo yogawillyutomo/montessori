@@ -8,7 +8,6 @@ use App\Models\ChildSessionBooking;
 use App\Models\ClassLevel;
 use App\Models\Report;
 use App\Models\ReportCycle;
-use App\Models\ReportEligibility;
 use App\Models\ReportPolicy;
 use App\Models\SessionOccurrence;
 use App\Models\Student;
@@ -208,18 +207,14 @@ class ReportEligibilityTest extends TestCase
         }
 
         $admin = User::query()->where('role', 'admin')->where('is_active', true)->firstOrFail();
-        $student = Student::query()->whereDoesntHave('childEnrollments')->first();
-
-        if (! $student) {
-            $template = Student::query()->firstOrFail();
-            $student = Student::query()->create([
-                'school_class_id' => $template->school_class_id,
-                'guardian_id' => $template->guardian_id,
-                'code' => $code.'-STUDENT',
-                'name' => $code.' Student',
-                'status' => 'active',
-            ]);
-        }
+        $template = Student::query()->firstOrFail();
+        $student = Student::query()->create([
+            'school_class_id' => $template->school_class_id,
+            'guardian_id' => $template->guardian_id,
+            'code' => $code.'-STUDENT',
+            'name' => $code.' Student',
+            'status' => 'active',
+        ]);
 
         $level = ClassLevel::query()->create([
             'name' => $code,
