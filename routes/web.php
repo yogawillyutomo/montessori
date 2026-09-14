@@ -4,7 +4,9 @@ use App\Http\Controllers\Alpha\AttendanceController;
 use App\Http\Controllers\Alpha\AuthController;
 use App\Http\Controllers\Alpha\DashboardController;
 use App\Http\Controllers\Alpha\DevelopmentProgressController;
+use App\Http\Controllers\Alpha\FollowUpCandidateController;
 use App\Http\Controllers\Alpha\MasterController;
+use App\Http\Controllers\Alpha\ObservationController;
 use App\Http\Controllers\Alpha\PresentationController;
 use App\Http\Controllers\Alpha\ProcessController;
 use App\Http\Controllers\Alpha\ReportController;
@@ -82,6 +84,7 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/process/attendance', [ProcessController::class, 'sessions'])->name('alpha.process.attendance');
         Route::get('/process/sessions', [ProcessController::class, 'sessions'])->name('alpha.process.sessions');
         Route::get('/process/observations', [ProcessController::class, 'observations'])->name('alpha.process.observations');
+        Route::get('/process/follow-up', [FollowUpCandidateController::class, 'index'])->name('alpha.process.follow-up');
         Route::get('/process/ilp', [ProcessController::class, 'ilp'])->name('alpha.process.ilp');
     });
 
@@ -98,7 +101,9 @@ Route::middleware('auth')->group(function (): void {
         Route::delete('/process/sessions/{classSession}', [ProcessController::class, 'destroySession'])->name('alpha.process.sessions.destroy');
         Route::post('/presentations', [PresentationController::class, 'store'])->name('alpha.presentations.store');
         Route::post('/development-progress', [DevelopmentProgressController::class, 'store'])->name('alpha.development-progress.store');
-        Route::post('/observations', [ProcessController::class, 'storeObservation'])->name('alpha.observations.store');
+        Route::post('/observations', [ObservationController::class, 'store'])->name('alpha.observations.store');
+        Route::post('/follow-up-candidates/{followUpCandidate}/confirm', [FollowUpCandidateController::class, 'confirm'])->name('alpha.follow-up-candidates.confirm');
+        Route::post('/follow-up-candidates/{followUpCandidate}/dismiss', [FollowUpCandidateController::class, 'dismiss'])->name('alpha.follow-up-candidates.dismiss');
         Route::patch('/process/ilp/{ilpPlan}', [ProcessController::class, 'updateIlp'])->name('alpha.process.ilp.update');
         Route::post('/reports/generate', [ReportController::class, 'generate'])->name('alpha.reports.generate');
         Route::post('/reports/students/{student}/draft', [ReportController::class, 'buildStudentDraft'])->name('alpha.reports.students.draft');

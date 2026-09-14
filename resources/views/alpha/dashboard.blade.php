@@ -2,13 +2,13 @@
 
 @section('title', 'Dashboard - Montessori Bloom')
 @section('page_title', 'Dashboard Monitoring')
-@section('page_subtitle', 'Ringkasan dari master data, observasi harian, dan draft laporan.')
+@section('page_subtitle', 'Ringkasan dari master data, observasi harian, review follow-up, dan draft laporan.')
 
 @section('content')
     <div class="section-head">
         <div>
             <h2>Ringkasan Operasional</h2>
-            <div class="meta">Data dibuat dari migration dan seeder Laravel. Rapor masih draft otomatis, bukan final.</div>
+            <div class="meta">Observation adalah evidence. Follow-up perlu direview sebelum menjadi support plan.</div>
         </div>
         <div class="toolbar">
             @if (in_array($activeRole, ['super_admin', 'admin'], true))
@@ -16,6 +16,7 @@
             @endif
             @if (in_array($activeRole, ['super_admin', 'admin', 'teacher', 'principal'], true))
                 <a class="btn teal" href="{{ route('alpha.process.observations') }}">{{ $activeRole === 'principal' ? 'Lihat Observasi' : 'Input Observasi' }}</a>
+                <a class="btn ghost" href="{{ route('alpha.process.follow-up') }}">{{ $activeRole === 'principal' ? 'Lihat Follow-Up' : 'Review Follow-Up' }}</a>
             @endif
             <a class="btn ghost" href="{{ route('alpha.reports') }}">Lihat Rapor</a>
         </div>
@@ -25,8 +26,8 @@
         <div class="metric"><span>Kelas aktif</span><strong>{{ $stats['classes'] }}</strong><span>Sunny, Glow, Infant</span></div>
         <div class="metric"><span>Siswa aktif</span><strong>{{ $stats['students'] }}</strong><span>terhubung ke orangtua</span></div>
         <div class="metric"><span>Jadwal mingguan</span><strong>{{ $stats['weekly_schedules'] }}</strong><span>fleksibel per minggu</span></div>
-        <div class="metric"><span>Draft rapor</span><strong>{{ $stats['draft_reports'] }}</strong><span>hasil generate otomatis</span></div>
-        <div class="metric"><span>Perlu stimulasi</span><strong>{{ $stats['needs_support'] }}</strong><span>masuk ILP</span></div>
+        <div class="metric"><span>Draft rapor</span><strong>{{ $stats['draft_reports'] }}</strong><span>menunggu penyelesaian</span></div>
+        <div class="metric"><span>Follow-up terbuka</span><strong>{{ $stats['open_follow_up'] }}</strong><span>menunggu review guide</span></div>
     </div>
 
     <div class="grid two">
@@ -34,7 +35,7 @@
             <div class="line-head">
                 <div>
                     <h3>Progress Area Perkembangan</h3>
-                    <div class="meta">Rata-rata skor dari observasi: tercapai 100, berkembang 65, perlu stimulasi 30.</div>
+                    <div class="meta">Rata-rata skor legacy dari observation tetap ditampilkan selama masa transisi domain.</div>
                 </div>
             </div>
             <div class="progress-list" style="margin-top: 14px">
@@ -55,15 +56,15 @@
             <div class="card-list" style="margin-top: 14px">
                 <div class="line-card">
                     <strong>1. Master Data</strong>
-                    <div class="meta">Kelas, siswa, guru, orangtua, tahun ajaran, dan indikator.</div>
+                    <div class="meta">Kelas, siswa, guide, orangtua, tahun ajaran, dan indikator.</div>
                 </div>
                 <div class="line-card">
-                    <strong>2. Proses Harian</strong>
-                    <div class="meta">Jadwal mingguan, ruang observasi, catatan kelas, dan ILP.</div>
+                    <strong>2. Evidence & Review</strong>
+                    <div class="meta">Presentation dan observation dicatat, lalu follow-up candidate ditinjau guide.</div>
                 </div>
                 <div class="line-card">
-                    <strong>3. Laporan</strong>
-                    <div class="meta">Draft rapor otomatis dari observasi, lalu direview guru/admin.</div>
+                    <strong>3. Support & Laporan</strong>
+                    <div class="meta">Support plan hanya dibuat setelah konfirmasi manusia; rapor tetap melalui review.</div>
                 </div>
             </div>
         </section>
@@ -128,31 +129,40 @@
     </div>
 
     <section class="panel panel-binder">
-        <h3>Perlu Stimulasi / ILP</h3>
+        <div class="line-head">
+            <div>
+                <h3>Follow-Up Menunggu Review</h3>
+                <div class="meta">Candidate terbuka belum menjadi support plan sampai guide/admin mengonfirmasi.</div>
+            </div>
+            <a class="btn ghost" href="{{ route('alpha.process.follow-up') }}">Buka Review Queue</a>
+        </div>
         <div class="table-wrap" style="margin-top: 14px">
             <table>
                 <thead>
                 <tr>
-                    <th>Tanggal</th>
+                    <th>Tanggal Evidence</th>
                     <th>Siswa</th>
                     <th>Kelas</th>
                     <th>Area</th>
-                    <th>Indikator</th>
-                    <th>Guru</th>
+                    <th>Indikator / Alasan</th>
+                    <th>Guide</th>
                 </tr>
                 </thead>
                 <tbody>
-                @forelse ($needsSupport as $observation)
+                @forelse ($followUpCandidates as $candidate)
                     <tr>
-                        <td>{{ $observation->observed_on->format('d M Y') }}</td>
-                        <td><strong>{{ $observation->student->name }}</strong></td>
-                        <td>{{ $observation->student->schoolClass->name }}</td>
-                        <td>{{ $observation->developmentArea?->name ?? $observation->indicator?->developmentArea?->name ?? '-' }}</td>
-                        <td>{{ $observation->indicator?->description ?? 'Catatan spontan tanpa indikator spesifik' }}</td>
-                        <td>{{ $observation->teacher->name }}</td>
+                        <td>{{ $candidate->sourceObservation?->observed_on?->format('d M Y') ?? '-' }}</td>
+                        <td><strong>{{ $candidate->student->name }}</strong></td>
+                        <td>{{ $candidate->student->schoolClass->name }}</td>
+                        <td>{{ $candidate->indicator?->developmentArea?->name ?? $candidate->sourceObservation?->developmentArea?->name ?? '-' }}</td>
+                        <td>
+                            <strong>{{ $candidate->indicator?->description ?? 'Belum dipilih saat observation' }}</strong>
+                            <div class="meta">{{ $candidate->reason_summary }}</div>
+                        </td>
+                        <td>{{ $candidate->sourceObservation?->teacher?->name ?? '-' }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="6">Belum ada observasi yang perlu stimulasi.</td></tr>
+                    <tr><td colspan="6">Tidak ada follow-up candidate terbuka.</td></tr>
                 @endforelse
                 </tbody>
             </table>

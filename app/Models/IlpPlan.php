@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['student_id', 'indicator_id', 'term_id', 'trigger_observation_id', 'status', 'analysis', 'target', 'follow_up', 'starts_on', 'ends_on'])]
+#[Fillable(['student_id', 'indicator_id', 'term_id', 'trigger_observation_id', 'follow_up_candidate_id', 'status', 'analysis', 'target', 'follow_up', 'starts_on', 'ends_on'])]
 class IlpPlan extends Model
 {
     use HasFactory;
@@ -38,5 +38,10 @@ class IlpPlan extends Model
     public function triggerObservation(): BelongsTo
     {
         return $this->belongsTo(Observation::class, 'trigger_observation_id');
+    }
+
+    public function followUpCandidate(): BelongsTo
+    {
+        return $this->belongsTo(FollowUpCandidate::class);
     }
 }

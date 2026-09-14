@@ -6,7 +6,7 @@ use App\Http\Controllers\Alpha\Concerns\ProvidesAlphaShell;
 use App\Http\Controllers\Controller;
 use App\Models\ClassSession;
 use App\Models\DevelopmentArea;
-use App\Models\Observation;
+use App\Models\FollowUpCandidate;
 use App\Models\Report;
 use App\Models\SchoolClass;
 use App\Models\WeeklySchedule;
@@ -32,7 +32,10 @@ class DashboardController extends Controller
                 'students' => count($studentIds),
                 'weekly_schedules' => WeeklySchedule::query()->whereIn('school_class_id', $classIds)->where('is_active', true)->count(),
                 'draft_reports' => Report::query()->whereIn('student_id', $studentIds)->where('status', 'draft')->count(),
-                'needs_support' => Observation::query()->whereIn('student_id', $studentIds)->where('needs_follow_up', true)->count(),
+                'open_follow_up' => FollowUpCandidate::query()
+                    ->whereIn('student_id', $studentIds)
+                    ->where('status', FollowUpCandidate::STATUS_OPEN)
+                    ->count(),
             ],
             'classes' => SchoolClass::query()
                 ->with('classLevel')
@@ -49,11 +52,16 @@ class DashboardController extends Controller
                 ->limit(6)
                 ->get(),
             'areaScores' => $this->areaScores($studentIds),
-            'needsSupport' => Observation::query()
-                ->with(['student.schoolClass', 'developmentArea', 'indicator.developmentArea', 'teacher'])
+            'followUpCandidates' => FollowUpCandidate::query()
+                ->with([
+                    'student.schoolClass',
+                    'sourceObservation.teacher',
+                    'sourceObservation.developmentArea',
+                    'indicator.developmentArea',
+                ])
                 ->whereIn('student_id', $studentIds)
-                ->where('needs_follow_up', true)
-                ->latest('observed_on')
+                ->where('status', FollowUpCandidate::STATUS_OPEN)
+                ->latest()
                 ->limit(5)
                 ->get(),
         ]);
