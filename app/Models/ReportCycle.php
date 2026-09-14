@@ -118,7 +118,9 @@ class ReportCycle extends Model
         });
 
         static::deleting(function (ReportCycle $cycle): void {
-            if ($cycle->status === 'closed') {
+            $persistedStatus = $cycle->getRawOriginal('status') ?? $cycle->status;
+
+            if ($persistedStatus === 'closed') {
                 throw new LogicException('Report cycle yang sudah ditutup tidak boleh dihapus.');
             }
         });
