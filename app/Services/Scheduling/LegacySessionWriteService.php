@@ -2,7 +2,10 @@
 
 namespace App\Services\Scheduling;
 
+use App\Models\BookingMovement;
+use App\Models\ChildSessionBooking;
 use App\Models\ClassSession;
+use App\Models\SessionOccurrence;
 use App\Models\User;
 use App\Models\WeeklySchedule;
 use Illuminate\Support\Carbon;
@@ -126,13 +129,51 @@ class LegacySessionWriteService
 
     public function destroy(ClassSession $session): void
     {
-        if ($session->observations()->exists()) {
+        if ($session->status !== 'planned') {
             throw ValidationException::withMessages([
-                'session' => 'Sesi belajar tidak bisa dihapus karena sudah memiliki observasi.',
+                'session' => 'Rollback legacy hanya boleh menghapus planned session tanpa evidence.',
             ]);
         }
 
-        $session->attendances()->delete();
+        if ($session->observations()->exists()
+            || $session->attendances()->whereNotNull('marked_at')->exists()) {
+            throw ValidationException::withMessages([
+                'session' => 'Sesi belajar tidak bisa dihapus karena sudah memiliki observation atau marked attendance evidence.',
+            ]);
+        }
+
+        $occurrence = SessionOccurrence::query()
+            ->where('legacy_class_session_id', $session->id)
+            ->first();
+
+        if ($occurrence) {
+            if ($occurrence->status !== 'planned' || $occurrence->presentations()->exists()) {
+                throw ValidationException::withMessages([
+                    'session' => 'Canonical occurrence sudah historical atau memiliki presentation evidence dan tidak boleh dihapus lewat rollback legacy.',
+                ]);
+            }
+
+            $bookings = ChildSessionBooking::query()
+                ->where('session_occurrence_id', $occurrence->id)
+                ->get();
+
+            foreach ($bookings as $booking) {
+                $hasMovement = BookingMovement::query()
+                    ->where('source_booking_id', $booking->id)
+                    ->orWhere('destination_booking_id', $booking->id)
+                    ->exists();
+
+                if ($booking->status !== 'scheduled'
+                    || $booking->session_credit_id !== null
+                    || $hasMovement) {
+                    throw ValidationException::withMessages([
+                        'session' => 'Canonical booking memiliki terminal history, credit, atau movement dan tidak boleh dihapus lewat rollback legacy.',
+                    ]);
+                }
+            }
+        }
+
+        $session->attendances()->whereNull('marked_at')->delete();
         $session->students()->detach();
         $session->delete();
     }
