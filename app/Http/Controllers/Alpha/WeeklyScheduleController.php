@@ -5,71 +5,49 @@ namespace App\Http\Controllers\Alpha;
 use App\Http\Controllers\Controller;
 use App\Models\SchoolClass;
 use App\Models\WeeklySchedule;
+use App\Services\Scheduling\ScheduleWriteService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 class WeeklyScheduleController extends Controller
 {
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, ScheduleWriteService $writer): RedirectResponse
     {
         $validated = $this->rules($request);
         $validated['capacity'] = $this->resolveCapacity($validated['capacity'] ?? null, (int) $validated['school_class_id']);
-        $this->validateTime($validated);
-        $this->validateStudents($validated);
-
-        $schedule = WeeklySchedule::create([
-            'school_class_id' => $validated['school_class_id'],
-            'teacher_id' => $validated['teacher_id'],
-            'room' => $this->normalizeRoom($validated['room'] ?? null),
-            'capacity' => $validated['capacity'],
-            'day_of_week' => $validated['day_of_week'],
-            'starts_at' => $validated['starts_at'],
-            'ends_at' => $validated['ends_at'],
-            'topic' => $validated['topic'] ?? null,
-            'is_active' => true,
-        ]);
-        $schedule->students()->sync($validated['student_ids'] ?? []);
+        $writer->create($validated);
 
         return back()->with('status', 'Jadwal mingguan berhasil ditambahkan.');
     }
 
-    public function update(Request $request, WeeklySchedule $weeklySchedule): RedirectResponse
+    public function update(Request $request, WeeklySchedule $weeklySchedule, ScheduleWriteService $writer): RedirectResponse
     {
         $validated = $this->rules($request);
         $validated['capacity'] = $this->resolveCapacity($validated['capacity'] ?? null, (int) $validated['school_class_id']);
-        $this->validateTime($validated, $weeklySchedule);
-        $this->validateStudents($validated, $weeklySchedule);
-
-        $weeklySchedule->update([
-            'school_class_id' => $validated['school_class_id'],
-            'teacher_id' => $validated['teacher_id'],
-            'room' => $this->normalizeRoom($validated['room'] ?? null),
-            'capacity' => $validated['capacity'],
-            'day_of_week' => $validated['day_of_week'],
-            'starts_at' => $validated['starts_at'],
-            'ends_at' => $validated['ends_at'],
-            'topic' => $validated['topic'] ?? null,
-        ]);
-        $weeklySchedule->students()->sync($validated['student_ids'] ?? []);
+        $writer->update($weeklySchedule, $validated);
 
         return back()->with('status', 'Jadwal mingguan berhasil diperbarui.');
     }
 
-    public function toggle(WeeklySchedule $weeklySchedule): RedirectResponse
+    public function toggle(WeeklySchedule $weeklySchedule, ScheduleWriteService $writer): RedirectResponse
     {
-        $weeklySchedule->update(['is_active' => ! $weeklySchedule->is_active]);
+        $writer->toggle($weeklySchedule);
 
         return back()->with('status', 'Status jadwal mingguan berhasil diperbarui.');
     }
 
-    public function destroy(WeeklySchedule $weeklySchedule): RedirectResponse
+    public function destroy(WeeklySchedule $weeklySchedule, ScheduleWriteService $writer): RedirectResponse
     {
         if ($weeklySchedule->classSessions()->exists()) {
             return back()->withErrors('Jadwal tidak bisa dihapus karena sudah pernah dibuat menjadi presensi.');
         }
 
-        $weeklySchedule->delete();
+        try {
+            $writer->delete($weeklySchedule);
+        } catch (ValidationException $exception) {
+            return back()->withErrors($exception->errors());
+        }
 
         return back()->with('status', 'Jadwal mingguan berhasil dihapus.');
     }
@@ -91,90 +69,6 @@ class WeeklyScheduleController extends Controller
             'student_ids' => ['nullable', 'array'],
             'student_ids.*' => ['integer', 'distinct', 'exists:students,id'],
         ]);
-    }
-
-    /**
-     * @param  array<string, mixed>  $validated
-     */
-    private function validateTime(array $validated, ?WeeklySchedule $ignore = null): void
-    {
-        if ($validated['ends_at'] <= $validated['starts_at']) {
-            throw ValidationException::withMessages([
-                'ends_at' => 'Jam selesai harus setelah jam mulai.',
-            ]);
-        }
-
-        $overlap = WeeklySchedule::query()
-            ->where('day_of_week', $validated['day_of_week'])
-            ->where('starts_at', '<', $validated['ends_at'])
-            ->where('ends_at', '>', $validated['starts_at'])
-            ->where(function ($query) use ($validated): void {
-                $query->where('school_class_id', $validated['school_class_id'])
-                    ->orWhere('teacher_id', $validated['teacher_id']);
-
-                if ($this->normalizeRoom($validated['room'] ?? null) !== null) {
-                    $query->orWhere('room', $this->normalizeRoom($validated['room']));
-                }
-            })
-            ->when($ignore, fn ($query) => $query->whereKeyNot($ignore->id))
-            ->exists();
-
-        if ($overlap) {
-            throw ValidationException::withMessages([
-                'starts_at' => 'Jadwal bentrok dengan kelas, guru, atau ruangan pada hari dan jam yang sama.',
-            ]);
-        }
-    }
-
-    /**
-     * @param  array<string, mixed>  $validated
-     */
-    private function validateStudents(array $validated, ?WeeklySchedule $ignore = null): void
-    {
-        $studentIds = $this->selectedStudentIds($validated);
-        if ($studentIds === []) {
-            return;
-        }
-
-        if (count($studentIds) > $validated['capacity']) {
-            throw ValidationException::withMessages([
-                'student_ids' => "Jumlah peserta melebihi kapasitas slot ({$validated['capacity']} siswa).",
-            ]);
-        }
-
-        $conflictExists = WeeklySchedule::query()
-            ->where('day_of_week', $validated['day_of_week'])
-            ->where('starts_at', '<', $validated['ends_at'])
-            ->where('ends_at', '>', $validated['starts_at'])
-            ->whereHas('students', fn ($query) => $query->whereIn('students.id', $studentIds))
-            ->when($ignore, fn ($query) => $query->whereKeyNot($ignore->id))
-            ->exists();
-
-        if ($conflictExists) {
-            throw ValidationException::withMessages([
-                'student_ids' => 'Ada siswa yang sudah punya slot mingguan lain pada hari dan jam yang sama.',
-            ]);
-        }
-    }
-
-    private function normalizeRoom(?string $room): ?string
-    {
-        $room = trim((string) $room);
-
-        return $room === '' ? null : $room;
-    }
-
-    /**
-     * @param  array<string, mixed>  $validated
-     * @return array<int, int>
-     */
-    private function selectedStudentIds(array $validated): array
-    {
-        return collect($validated['student_ids'] ?? [])
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values()
-            ->all();
     }
 
     private function resolveCapacity(null|int|string $capacity, int $schoolClassId): int
