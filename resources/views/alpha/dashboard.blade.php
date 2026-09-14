@@ -144,7 +144,7 @@
                     <th>Siswa</th>
                     <th>Kelas</th>
                     <th>Area</th>
-                    <th>Indikator</th>
+                    <th>Indikator / Alasan</th>
                     <th>Guide</th>
                 </tr>
                 </thead>
@@ -155,7 +155,10 @@
                         <td><strong>{{ $candidate->student->name }}</strong></td>
                         <td>{{ $candidate->student->schoolClass->name }}</td>
                         <td>{{ $candidate->indicator?->developmentArea?->name ?? $candidate->sourceObservation?->developmentArea?->name ?? '-' }}</td>
-                        <td>{{ $candidate->indicator?->description ?? 'Belum dipilih saat observation' }}</td>
+                        <td>
+                            <strong>{{ $candidate->indicator?->description ?? 'Belum dipilih saat observation' }}</strong>
+                            <div class="meta">{{ $candidate->reason_summary }}</div>
+                        </td>
                         <td>{{ $candidate->sourceObservation?->teacher?->name ?? '-' }}</td>
                     </tr>
                 @empty
