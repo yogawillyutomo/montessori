@@ -176,7 +176,12 @@
         <header class="header">
             <div>
                 <h1>Rapor Perkembangan Montessori</h1>
-                <p class="muted">Montessori Bloom | {{ $term->academicYear?->name }} - {{ $term->name }}</p>
+                <p class="muted">
+                    Montessori Bloom | {{ $term->academicYear?->name }} - {{ $term->name }}
+                    @if ($reportCycle)
+                        | Cycle: {{ $reportCycle->name }} | Cutoff {{ $reportCycle->cutoff_date?->format('d M Y') }}
+                    @endif
+                </p>
             </div>
             <span class="badge">{{ $report->status_label }}</span>
         </header>
@@ -206,7 +211,7 @@
         <section>
             <h2>Ringkasan Observasi</h2>
             <div class="area">
-                @forelse ($observationSummary['areas'] as $area)
+                @forelse ($observationSummary['areas'] ?? [] as $area)
                     <div class="area-row">
                         <h3>{{ $area['name'] }}</h3>
                         <p class="muted">{{ $area['observed'] }} catatan | skor ringkas {{ $area['score'] }}% | {{ $area['needs_follow_up'] }} perlu tindak lanjut</p>
