@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\Alpha\AttendanceController;
 use App\Http\Controllers\Alpha\IlpController;
-use App\Http\Controllers\Alpha\ProcessController;
+use App\Http\Controllers\Alpha\ProcessPageController;
 use App\Http\Controllers\Alpha\SessionController;
 use App\Http\Controllers\Alpha\WeeklyScheduleController;
 use Illuminate\Support\Facades\Route;
@@ -27,15 +27,9 @@ class ControllerBoundaryTest extends TestCase
             $this->assertNotNull($route, "Route {$routeName} harus tetap tersedia.");
             $this->assertSame($action, $route->getActionName());
         }
-
-        $scheduleIndex = Route::getRoutes()->getByName('alpha.process.schedules');
-
-        $this->assertNotNull($scheduleIndex);
-        $this->assertSame(ProcessController::class.'@schedules', $scheduleIndex->getActionName());
-        $this->assertSame('process/schedules', $scheduleIndex->uri());
     }
 
-    public function test_session_mutations_use_dedicated_controller_while_attendance_and_read_routes_keep_their_boundaries(): void
+    public function test_session_mutations_use_dedicated_controller_while_attendance_keeps_its_boundary(): void
     {
         $expected = [
             'alpha.sessions.create-from-schedule' => SessionController::class.'@createFromSchedule',
@@ -53,25 +47,45 @@ class ControllerBoundaryTest extends TestCase
         }
 
         $attendance = Route::getRoutes()->getByName('alpha.process.sessions.attendance');
-        $sessionIndex = Route::getRoutes()->getByName('alpha.process.sessions');
 
         $this->assertNotNull($attendance);
         $this->assertSame(AttendanceController::class.'@update', $attendance->getActionName());
-        $this->assertNotNull($sessionIndex);
-        $this->assertSame(ProcessController::class.'@sessions', $sessionIndex->getActionName());
-        $this->assertSame('process/sessions', $sessionIndex->uri());
     }
 
-    public function test_ilp_mutation_uses_dedicated_controller_while_ilp_read_route_remains_stable(): void
+    public function test_ilp_mutation_uses_dedicated_controller(): void
     {
         $update = Route::getRoutes()->getByName('alpha.process.ilp.update');
-        $index = Route::getRoutes()->getByName('alpha.process.ilp');
 
         $this->assertNotNull($update);
         $this->assertSame(IlpController::class.'@update', $update->getActionName());
         $this->assertSame('process/ilp/{ilpPlan}', $update->uri());
-        $this->assertNotNull($index);
-        $this->assertSame(ProcessController::class.'@ilp', $index->getActionName());
-        $this->assertSame('process/ilp', $index->uri());
+    }
+
+    public function test_process_read_routes_use_process_page_controller_with_stable_contracts(): void
+    {
+        $expected = [
+            'alpha.process' => [ProcessPageController::class.'@schedules', 'process'],
+            'alpha.process.schedules' => [ProcessPageController::class.'@schedules', 'process/schedules'],
+            'alpha.process.attendance' => [ProcessPageController::class.'@sessions', 'process/attendance'],
+            'alpha.process.sessions' => [ProcessPageController::class.'@sessions', 'process/sessions'],
+            'alpha.process.observations' => [ProcessPageController::class.'@observations', 'process/observations'],
+            'alpha.process.ilp' => [ProcessPageController::class.'@ilp', 'process/ilp'],
+        ];
+
+        foreach ($expected as $routeName => [$action, $uri]) {
+            $route = Route::getRoutes()->getByName($routeName);
+
+            $this->assertNotNull($route, "Route {$routeName} harus tetap tersedia.");
+            $this->assertSame($action, $route->getActionName());
+            $this->assertSame($uri, $route->uri());
+        }
+
+        foreach (Route::getRoutes() as $route) {
+            $this->assertStringNotContainsString(
+                'ProcessController@',
+                $route->getActionName(),
+                "Route {$route->getName()} masih terhubung ke ProcessController legacy.",
+            );
+        }
     }
 }
