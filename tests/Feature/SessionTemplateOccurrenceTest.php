@@ -73,6 +73,7 @@ class SessionTemplateOccurrenceTest extends TestCase
     public function test_legacy_updates_are_reflected_without_inventing_environment_or_validity(): void
     {
         $this->seed();
+        config()->set('montessori.session.write_source', 'legacy');
 
         $schedule = WeeklySchedule::query()->firstOrFail();
         $schedule->update([
@@ -115,6 +116,7 @@ class SessionTemplateOccurrenceTest extends TestCase
     public function test_session_without_legacy_weekly_schedule_still_maps_without_fake_template(): void
     {
         $this->seed();
+        config()->set('montessori.session.write_source', 'legacy');
 
         $source = ClassSession::query()->firstOrFail();
         $standalone = ClassSession::query()->create([
@@ -144,6 +146,7 @@ class SessionTemplateOccurrenceTest extends TestCase
     public function test_deleting_legacy_records_preserves_target_lineage(): void
     {
         $this->seed();
+        config()->set('montessori.session.write_source', 'legacy');
 
         $session = ClassSession::query()
             ->doesntHave('observations')

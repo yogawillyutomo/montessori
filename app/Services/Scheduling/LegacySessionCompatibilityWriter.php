@@ -10,6 +10,11 @@ use Illuminate\Validation\ValidationException;
 
 class LegacySessionCompatibilityWriter
 {
+    private const MIRRORED_BOOKING_STATUSES = [
+        'scheduled',
+        'session_cancelled',
+    ];
+
     public function syncOccurrence(SessionOccurrence $occurrence): ?int
     {
         $legacyId = $occurrence->legacy_class_session_id;
@@ -63,8 +68,9 @@ class LegacySessionCompatibilityWriter
             return null;
         }
 
-        if (in_array($booking->status, ['rescheduled_out', 'cancelled'], true)) {
+        if (! in_array($booking->status, self::MIRRORED_BOOKING_STATUSES, true)) {
             $this->removeBookingMirror($booking);
+            $this->pruneOrphanPivots((int) $legacySessionId);
 
             return null;
         }
@@ -97,6 +103,8 @@ class LegacySessionCompatibilityWriter
             'legacy_class_session_id' => $legacySessionId,
             'legacy_deleted_at' => null,
         ])->save();
+
+        $this->pruneOrphanPivots((int) $legacySessionId);
 
         return (int) $pivotId;
     }
@@ -198,6 +206,48 @@ class LegacySessionCompatibilityWriter
             ...$notes,
             'updated_at' => now(),
         ]);
+    }
+
+    private function pruneOrphanPivots(int $legacySessionId): void
+    {
+        $desiredStudentIds = ChildSessionBooking::query()
+            ->where('legacy_class_session_id', $legacySessionId)
+            ->whereIn('status', self::MIRRORED_BOOKING_STATUSES)
+            ->pluck('student_id')
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        $stale = DB::table('class_session_student')
+            ->where('class_session_id', $legacySessionId)
+            ->when($desiredStudentIds !== [], fn ($query) => $query->whereNotIn('student_id', $desiredStudentIds))
+            ->get(['id', 'student_id']);
+
+        if ($desiredStudentIds === []) {
+            $stale = DB::table('class_session_student')
+                ->where('class_session_id', $legacySessionId)
+                ->get(['id', 'student_id']);
+        }
+
+        foreach ($stale as $pivot) {
+            $booking = ChildSessionBooking::query()
+                ->where('legacy_class_session_student_id', $pivot->id)
+                ->first();
+
+            if ($booking) {
+                $this->removeBookingMirror($booking);
+
+                continue;
+            }
+
+            DB::table('class_session_student')->where('id', $pivot->id)->delete();
+            Attendance::query()
+                ->where('class_session_id', $legacySessionId)
+                ->where('student_id', $pivot->student_id)
+                ->whereNull('marked_at')
+                ->delete();
+        }
     }
 
     private function attendanceFor(ChildSessionBooking $booking): ?Attendance
