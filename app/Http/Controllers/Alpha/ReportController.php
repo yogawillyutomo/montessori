@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Alpha;
 use App\Http\Controllers\Alpha\Concerns\ProvidesAlphaShell;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Alpha\Report\SaveStudentReportRequest;
+use App\Models\Observation;
 use App\Models\Report;
 use App\Models\ReportCycle;
 use App\Models\ReportEligibility;
@@ -19,6 +20,7 @@ use App\Services\Alpha\ReportStudentListService;
 use App\Support\Alpha\Role;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\View\View;
 use stdClass;
 
@@ -286,7 +288,7 @@ class ReportController extends Controller
     {
         $summary['latest'] = collect($summary['latest'] ?? [])
             ->map(function ($observation) {
-                if ($observation instanceof \App\Models\Observation) {
+                if ($observation instanceof Observation) {
                     return $observation;
                 }
 
@@ -297,10 +299,10 @@ class ReportController extends Controller
                 $view->indicator = $this->nestedObject($data['indicator'] ?? null);
                 $view->teacher = $this->nestedObject($data['teacher'] ?? null);
                 $view->observed_on = ! empty($data['observed_on'])
-                    ? \Illuminate\Support\Carbon::parse($data['observed_on'])
+                    ? Carbon::parse($data['observed_on'])
                     : null;
                 $view->level_label = $data['level_label']
-                    ?? \App\Models\Observation::LEVELS[$level]
+                    ?? Observation::LEVELS[$level]
                     ?? $level
                     ?? '-';
                 $view->level_badge_class = $data['level_badge_class']
