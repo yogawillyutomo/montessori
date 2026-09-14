@@ -74,6 +74,7 @@ class ReportController extends Controller
         $report = Report::query()
             ->where('student_id', $student->id)
             ->where('term_id', $term->id)
+            ->whereNull('report_cycle_id')
             ->first();
 
         return $this->studentReportView($request, $student, $term, $observationSummary, $report);
@@ -81,7 +82,14 @@ class ReportController extends Controller
 
     public function show(Request $request, Report $report, ObservationSummaryService $observationSummary): View
     {
-        $report->loadMissing(['student.guardian', 'student.schoolClass.classLevel', 'term.academicYear', 'homeroomTeacher']);
+        $report->loadMissing([
+            'student.guardian',
+            'student.schoolClass.classLevel',
+            'term.academicYear',
+            'reportCycle.reportPolicy',
+            'homeroomTeacher',
+            'publishedVersion',
+        ]);
         $scope = app(AccessScopeService::class);
 
         abort_if(! $request->user() || ! $scope->canViewReport($request->user(), $report), 403);
@@ -129,17 +137,38 @@ class ReportController extends Controller
 
     public function print(Request $request, Report $report, ObservationSummaryService $observationSummary): View
     {
-        $report->loadMissing(['student.guardian', 'student.schoolClass.classLevel', 'term.academicYear', 'homeroomTeacher']);
+        $report->loadMissing([
+            'student.guardian',
+            'student.schoolClass.classLevel',
+            'term.academicYear',
+            'reportCycle.reportPolicy',
+            'homeroomTeacher',
+            'publishedVersion',
+        ]);
         $scope = app(AccessScopeService::class);
+        $user = $request->user();
 
-        abort_if(! $request->user() || ! $scope->canViewReport($request->user(), $report), 403);
+        abort_if(! $user || ! $scope->canViewReport($user, $report), 403);
+
+        $displayReport = $user->role === Role::PARENT
+            ? $report->publishedDisplayReport()
+            : $report;
+        abort_if(! $displayReport, 403);
+
+        $summaryObservation = (array) ($displayReport->summary['observation'] ?? []);
+        if ($summaryObservation === []) {
+            $summaryObservation = $report->reportCycle
+                ? $observationSummary->summarizeForCycle($report->student, $report->reportCycle)
+                : $observationSummary->summarizeForStudent($report->student, $report->term);
+        }
 
         return view('alpha.report-print', [
-            'report' => $report,
+            'report' => $displayReport,
             'student' => $report->student,
             'term' => $report->term,
-            'attendance' => $report->manualAttendanceSummary(),
-            'observationSummary' => $observationSummary->summarizeForStudent($report->student, $report->term),
+            'reportCycle' => $report->reportCycle,
+            'attendance' => $displayReport->manualAttendanceSummary(),
+            'observationSummary' => $summaryObservation,
             'statusLabels' => $this->statusLabels(),
         ]);
     }
@@ -172,22 +201,53 @@ class ReportController extends Controller
         $scope = app(AccessScopeService::class);
 
         abort_if(! $user || ! $scope->canViewStudent($user, $student), 403);
-        abort_if($user->role === Role::PARENT && (! $report || $report->status !== 'published'), 403);
 
         $student->loadMissing(['guardian', 'schoolClass.classLevel']);
-        $report?->loadMissing(['student.guardian', 'student.schoolClass.classLevel', 'term.academicYear', 'homeroomTeacher']);
+        $report?->loadMissing([
+            'student.guardian',
+            'student.schoolClass.classLevel',
+            'term.academicYear',
+            'reportCycle.reportPolicy',
+            'homeroomTeacher',
+            'publishedVersion',
+        ]);
 
-        $isPublished = $report?->status === 'published';
+        if ($user->role === Role::PARENT) {
+            abort_if(! $report || ! $scope->canViewReport($user, $report), 403);
+            $displayReport = $report->publishedDisplayReport();
+            abort_if(! $displayReport, 403);
+        } else {
+            $displayReport = $report;
+        }
+
+        $isCycleReport = $report?->isCycleReport() ?? false;
+        $workingStatus = $report?->status ?? 'not_created';
+        $isPublished = $workingStatus === 'published';
+        $isEditableCycleState = $isCycleReport && in_array($workingStatus, ['draft', 'revision_requested'], true);
+        $canGenerate = $scope->canGenerateReport($user);
+        $canReview = $scope->canApproveReport($user);
+        $isPublisher = in_array($user->role, [Role::SUPER_ADMIN, Role::ADMIN], true);
+
+        $summaryObservation = (array) ($displayReport?->summary['observation'] ?? []);
+        if ($summaryObservation === []) {
+            $summaryObservation = $report?->reportCycle
+                ? $observationSummary->summarizeForCycle($student, $report->reportCycle)
+                : $observationSummary->summarizeForStudent($student, $term);
+        }
 
         return view('alpha.report-student', [
             ...$this->shell($request, 'reports'),
             'student' => $student,
             'term' => $term,
             'terms' => Term::query()->with('academicYear')->latest('starts_on')->get(),
-            'report' => $report,
-            'reportStatus' => $report?->status ?? 'not_created',
-            'observationSummary' => $observationSummary->summarizeForStudent($student, $term),
-            'attendance' => $report?->manualAttendanceSummary() ?? [
+            'report' => $displayReport,
+            'workingReport' => $report,
+            'reportCycle' => $report?->reportCycle,
+            'isCycleReport' => $isCycleReport,
+            'reportStatus' => $displayReport?->status ?? 'not_created',
+            'workingReportStatus' => $workingStatus,
+            'observationSummary' => $summaryObservation,
+            'attendance' => $displayReport?->manualAttendanceSummary() ?? [
                 'recorded' => 0,
                 'present' => 0,
                 'late' => 0,
@@ -196,9 +256,18 @@ class ReportController extends Controller
                 'absent' => 0,
                 'attendance_rate' => 0,
             ],
-            'canBuildDraft' => $scope->canGenerateReport($user) && ! $isPublished,
-            'canEditReport' => $user->role !== Role::PARENT && ! $isPublished,
-            'canPublishReport' => in_array($user->role, [Role::SUPER_ADMIN, Role::ADMIN], true) && $report !== null && ! $isPublished,
+            'canBuildDraft' => ! $isCycleReport && $canGenerate && ! $isPublished,
+            'canEditReport' => $isCycleReport
+                ? $canGenerate && $isEditableCycleState
+                : $user->role !== Role::PARENT && ! $isPublished,
+            'canPublishReport' => ! $isCycleReport && $isPublisher && $report !== null && ! $isPublished,
+            'canSubmitCycleReport' => $isCycleReport && $canGenerate && in_array($workingStatus, ['draft', 'revision_requested'], true),
+            'canStartCycleReview' => $isCycleReport && $canReview && $workingStatus === 'submitted_for_review',
+            'canRequestCycleRevision' => $isCycleReport && $canReview && $workingStatus === 'under_review',
+            'canApproveCycleReport' => $isCycleReport && $canReview && $workingStatus === 'under_review',
+            'canPublishCycleReport' => $isCycleReport && $isPublisher && $workingStatus === 'approved',
+            'canBeginCycleRevision' => $isCycleReport && $isPublisher && $workingStatus === 'published',
+            'canArchiveCycleReport' => $isCycleReport && $isPublisher && $workingStatus === 'published',
             'isParentView' => $user->role === Role::PARENT,
         ]);
     }
