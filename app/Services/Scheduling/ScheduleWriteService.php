@@ -220,6 +220,67 @@ class ScheduleWriteService
     }
 
     /**
+     * Preserve the exact pre-cutover validation semantics for the emergency legacy rollback path.
+     *
+     * @param  array<string, mixed>  $payload
+     * @param  array<int, int>  $studentIds
+     */
+    private function assertLegacyValid(array $payload, array $studentIds, ?WeeklySchedule $ignore = null): void
+    {
+        if ($payload['ends_at'] <= $payload['starts_at']) {
+            throw ValidationException::withMessages([
+                'ends_at' => 'Jam selesai harus setelah jam mulai.',
+            ]);
+        }
+
+        if (count($studentIds) > (int) $payload['capacity']) {
+            throw ValidationException::withMessages([
+                'student_ids' => "Jumlah peserta melebihi kapasitas slot ({$payload['capacity']} siswa).",
+            ]);
+        }
+
+        $room = $this->normalizeRoom($payload['room'] ?? null);
+        $overlap = WeeklySchedule::query()
+            ->where('day_of_week', $payload['day_of_week'])
+            ->where('starts_at', '<', $payload['ends_at'])
+            ->where('ends_at', '>', $payload['starts_at'])
+            ->where(function ($query) use ($payload, $room): void {
+                $query->where('school_class_id', $payload['school_class_id'])
+                    ->orWhere('teacher_id', $payload['teacher_id']);
+
+                if ($room !== null) {
+                    $query->orWhere('room', $room);
+                }
+            })
+            ->when($ignore, fn ($query) => $query->whereKeyNot($ignore->id))
+            ->exists();
+
+        if ($overlap) {
+            throw ValidationException::withMessages([
+                'starts_at' => 'Jadwal bentrok dengan kelas, guru, atau ruangan pada hari dan jam yang sama.',
+            ]);
+        }
+
+        if ($studentIds === []) {
+            return;
+        }
+
+        $studentConflict = WeeklySchedule::query()
+            ->where('day_of_week', $payload['day_of_week'])
+            ->where('starts_at', '<', $payload['ends_at'])
+            ->where('ends_at', '>', $payload['starts_at'])
+            ->whereHas('students', fn ($query) => $query->whereIn('students.id', $studentIds))
+            ->when($ignore, fn ($query) => $query->whereKeyNot($ignore->id))
+            ->exists();
+
+        if ($studentConflict) {
+            throw ValidationException::withMessages([
+                'student_ids' => 'Ada siswa yang sudah punya slot mingguan lain pada hari dan jam yang sama.',
+            ]);
+        }
+    }
+
+    /**
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */
@@ -342,7 +403,6 @@ class ScheduleWriteService
                         ->limit(1);
                 })
                 ->where('student_id', $studentId)
-                ->whereNull('legacy_student_weekly_schedule_id')
                 ->update([
                     'legacy_student_weekly_schedule_id' => $pivotId,
                     'updated_at' => now(),
@@ -380,10 +440,11 @@ class ScheduleWriteService
      */
     private function createLegacy(array $payload): WeeklySchedule
     {
-        $schedule = WeeklySchedule::query()->create([
-            ...$this->legacyPayload($payload),
-        ]);
-        $schedule->students()->sync($this->studentIds($payload));
+        $studentIds = $this->studentIds($payload);
+        $this->assertLegacyValid($payload, $studentIds);
+
+        $schedule = WeeklySchedule::query()->create($this->legacyPayload($payload));
+        $schedule->students()->sync($studentIds);
 
         return $schedule->fresh();
     }
@@ -393,8 +454,11 @@ class ScheduleWriteService
      */
     private function updateLegacy(WeeklySchedule $schedule, array $payload): WeeklySchedule
     {
+        $studentIds = $this->studentIds($payload);
+        $this->assertLegacyValid($payload, $studentIds, $schedule);
+
         $schedule->update($this->legacyPayload($payload, (bool) $schedule->is_active));
-        $schedule->students()->sync($this->studentIds($payload));
+        $schedule->students()->sync($studentIds);
 
         return $schedule->fresh();
     }
