@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Alpha;
 
 use App\Http\Controllers\Alpha\Concerns\ProvidesAlphaShell;
 use App\Http\Controllers\Controller;
-use App\Models\ClassSession;
 use App\Models\DevelopmentArea;
 use App\Models\IlpPlan;
 use App\Models\Indicator;
@@ -12,8 +11,8 @@ use App\Models\Observation;
 use App\Models\SchoolClass;
 use App\Models\Student;
 use App\Models\Teacher;
-use App\Models\WeeklySchedule;
 use App\Services\Alpha\AccessScopeService;
+use App\Services\Scheduling\SchedulingReadModelService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -44,20 +43,14 @@ class ProcessPageController extends Controller
     private function processView(Request $request, string $processSection, string $activeMenu): View
     {
         $scope = app(AccessScopeService::class);
+        $scheduling = app(SchedulingReadModelService::class);
         $user = $request->user();
         $studentIds = $user ? $scope->accessibleStudentIds($user) : [];
         $classIds = $user ? $scope->accessibleClassIds($user) : [];
         $teacher = $user ? $scope->teacherFor($user) : null;
         $selectedSessionDate = $request->date('date')?->toDateString() ?? now()->toDateString();
-        $sessions = ClassSession::query()
-            ->with(['weeklySchedule', 'schoolClass.classLevel', 'teacher', 'students.guardian', 'students.schoolClass', 'attendances.student'])
-            ->withCount('observations')
-            ->whereIn('school_class_id', $classIds)
-            ->when($teacher, fn ($query) => $query->where('teacher_id', $teacher->id))
-            ->orderByDesc('session_date')
-            ->orderBy('starts_at')
-            ->limit(80)
-            ->get();
+        $schedules = $scheduling->schedules($classIds, $teacher);
+        $sessions = $scheduling->sessions($classIds, $teacher);
         $indicators = Indicator::query()
             ->with('developmentArea')
             ->where('is_active', true)
@@ -93,13 +86,7 @@ class ProcessPageController extends Controller
         return view('alpha.process', [
             ...$this->shell($request, $activeMenu),
             'processSection' => $processSection,
-            'schedules' => WeeklySchedule::query()
-                ->with(['schoolClass.classLevel', 'teacher', 'students.guardian', 'students.schoolClass'])
-                ->whereIn('school_class_id', $classIds)
-                ->when($teacher, fn ($query) => $query->where('teacher_id', $teacher->id))
-                ->orderBy('day_of_week')
-                ->orderBy('starts_at')
-                ->get(),
+            'schedules' => $schedules,
             'sessions' => $sessions,
             'selectedSessionDate' => $selectedSessionDate,
             'observations' => Observation::query()
