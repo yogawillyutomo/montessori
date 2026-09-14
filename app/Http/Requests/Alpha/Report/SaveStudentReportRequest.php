@@ -30,8 +30,6 @@ class SaveStudentReportRequest extends FormRequest
     {
         return [
             'term_id' => ['nullable', 'exists:terms,id'],
-            // Publication is intentionally excluded from the generic save endpoint.
-            // Publishing must go through the dedicated, authorized publish action.
             'status' => ['required', Rule::in(['draft', 'ready', 'archived'])],
             'manual_present_total' => ['nullable', 'integer', 'min:0', 'max:999'],
             'manual_sick_total' => ['nullable', 'integer', 'min:0', 'max:999'],
@@ -102,6 +100,7 @@ class SaveStudentReportRequest extends FormRequest
             $existing = Report::query()
                 ->where('student_id', $student->id)
                 ->where('term_id', $termId)
+                ->whereNull('report_cycle_id')
                 ->first();
 
             if ($existing?->status === 'published') {
