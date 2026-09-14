@@ -73,8 +73,11 @@ class BookingRescheduleService
                 ]);
             }
 
-            if ($this->evidence->hasObservationEvidence($source)) {
-                throw ValidationException::withMessages(['source_booking_id' => 'Booking yang sudah memiliki observasi tidak boleh dipindahkan.']);
+            if ($this->evidence->hasObservationEvidence($source)
+                || $this->evidence->hasPresentationEvidence($source)) {
+                throw ValidationException::withMessages([
+                    'source_booking_id' => 'Booking yang sudah memiliki observation atau presentation evidence tidak boleh dipindahkan.',
+                ]);
             }
 
             $duplicateDestinationDate = ChildSessionBooking::query()
