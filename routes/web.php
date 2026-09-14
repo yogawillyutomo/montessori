@@ -13,6 +13,7 @@ use App\Http\Controllers\Alpha\PresentationController;
 use App\Http\Controllers\Alpha\ProcessController;
 use App\Http\Controllers\Alpha\ReportController;
 use App\Http\Controllers\Alpha\ReportEligibilityController;
+use App\Http\Controllers\Alpha\SessionController;
 use App\Http\Controllers\Alpha\SettingController;
 use App\Http\Controllers\Alpha\WeeklyScheduleController;
 use App\Http\Middleware\EnsureTeacherSessionMutationScope;
@@ -93,16 +94,16 @@ Route::middleware('auth')->group(function (): void {
     });
 
     Route::middleware('role:super_admin,admin,teacher')->group(function (): void {
-        Route::post('/sessions/from-schedule', [ProcessController::class, 'createSession'])->name('alpha.sessions.create-from-schedule');
-        Route::patch('/process/sessions/{classSession}', [ProcessController::class, 'updateSession'])
+        Route::post('/sessions/from-schedule', [SessionController::class, 'createFromSchedule'])->name('alpha.sessions.create-from-schedule');
+        Route::patch('/process/sessions/{classSession}', [SessionController::class, 'update'])
             ->middleware(EnsureTeacherSessionMutationScope::class)
             ->name('alpha.process.sessions.update');
-        Route::patch('/process/sessions/{classSession}/note', [ProcessController::class, 'updateSessionNote'])->name('alpha.process.sessions.note');
+        Route::patch('/process/sessions/{classSession}/note', [SessionController::class, 'updateNote'])->name('alpha.process.sessions.note');
         Route::patch('/process/sessions/{classSession}/attendance', [AttendanceController::class, 'update'])
             ->middleware(EnsureTeacherSessionMutationScope::class)
             ->name('alpha.process.sessions.attendance');
-        Route::patch('/process/sessions/{classSession}/close', [ProcessController::class, 'closeSession'])->name('alpha.process.sessions.close');
-        Route::delete('/process/sessions/{classSession}', [ProcessController::class, 'destroySession'])->name('alpha.process.sessions.destroy');
+        Route::patch('/process/sessions/{classSession}/close', [SessionController::class, 'close'])->name('alpha.process.sessions.close');
+        Route::delete('/process/sessions/{classSession}', [SessionController::class, 'destroy'])->name('alpha.process.sessions.destroy');
         Route::post('/presentations', [PresentationController::class, 'store'])->name('alpha.presentations.store');
         Route::post('/development-progress', [DevelopmentProgressController::class, 'store'])->name('alpha.development-progress.store');
         Route::post('/observations', [ObservationController::class, 'store'])->name('alpha.observations.store');
