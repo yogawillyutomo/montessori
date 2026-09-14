@@ -14,6 +14,7 @@ use App\Http\Controllers\Alpha\ProcessController;
 use App\Http\Controllers\Alpha\ReportController;
 use App\Http\Controllers\Alpha\ReportEligibilityController;
 use App\Http\Controllers\Alpha\SettingController;
+use App\Http\Controllers\Alpha\WeeklyScheduleController;
 use App\Http\Middleware\EnsureTeacherSessionMutationScope;
 use Illuminate\Support\Facades\Route;
 
@@ -75,10 +76,10 @@ Route::middleware('auth')->group(function (): void {
         Route::patch('/master/indicators/{indicator}', [MasterController::class, 'updateIndicator'])->name('alpha.master.indicators.update');
         Route::patch('/master/indicators/{indicator}/toggle', [MasterController::class, 'toggleIndicator'])->name('alpha.master.indicators.toggle');
         Route::delete('/master/indicators/{indicator}', [MasterController::class, 'destroyIndicator'])->name('alpha.master.indicators.destroy');
-        Route::post('/process/schedules', [ProcessController::class, 'storeSchedule'])->name('alpha.process.schedules.store');
-        Route::patch('/process/schedules/{weeklySchedule}', [ProcessController::class, 'updateSchedule'])->name('alpha.process.schedules.update');
-        Route::patch('/process/schedules/{weeklySchedule}/toggle', [ProcessController::class, 'toggleSchedule'])->name('alpha.process.schedules.toggle');
-        Route::delete('/process/schedules/{weeklySchedule}', [ProcessController::class, 'destroySchedule'])->name('alpha.process.schedules.destroy');
+        Route::post('/process/schedules', [WeeklyScheduleController::class, 'store'])->name('alpha.process.schedules.store');
+        Route::patch('/process/schedules/{weeklySchedule}', [WeeklyScheduleController::class, 'update'])->name('alpha.process.schedules.update');
+        Route::patch('/process/schedules/{weeklySchedule}/toggle', [WeeklyScheduleController::class, 'toggle'])->name('alpha.process.schedules.toggle');
+        Route::delete('/process/schedules/{weeklySchedule}', [WeeklyScheduleController::class, 'destroy'])->name('alpha.process.schedules.destroy');
     });
 
     Route::middleware('role:super_admin,admin,teacher,principal')->group(function (): void {
