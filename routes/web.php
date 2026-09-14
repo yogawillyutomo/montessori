@@ -11,7 +11,7 @@ use App\Http\Controllers\Alpha\IlpController;
 use App\Http\Controllers\Alpha\MasterController;
 use App\Http\Controllers\Alpha\ObservationController;
 use App\Http\Controllers\Alpha\PresentationController;
-use App\Http\Controllers\Alpha\ProcessController;
+use App\Http\Controllers\Alpha\ProcessPageController;
 use App\Http\Controllers\Alpha\ReportController;
 use App\Http\Controllers\Alpha\ReportEligibilityController;
 use App\Http\Controllers\Alpha\SessionController;
@@ -85,13 +85,13 @@ Route::middleware('auth')->group(function (): void {
     });
 
     Route::middleware('role:super_admin,admin,teacher,principal')->group(function (): void {
-        Route::get('/process', [ProcessController::class, 'schedules'])->name('alpha.process');
-        Route::get('/process/schedules', [ProcessController::class, 'schedules'])->name('alpha.process.schedules');
-        Route::get('/process/attendance', [ProcessController::class, 'sessions'])->name('alpha.process.attendance');
-        Route::get('/process/sessions', [ProcessController::class, 'sessions'])->name('alpha.process.sessions');
-        Route::get('/process/observations', [ProcessController::class, 'observations'])->name('alpha.process.observations');
+        Route::get('/process', [ProcessPageController::class, 'schedules'])->name('alpha.process');
+        Route::get('/process/schedules', [ProcessPageController::class, 'schedules'])->name('alpha.process.schedules');
+        Route::get('/process/attendance', [ProcessPageController::class, 'sessions'])->name('alpha.process.attendance');
+        Route::get('/process/sessions', [ProcessPageController::class, 'sessions'])->name('alpha.process.sessions');
+        Route::get('/process/observations', [ProcessPageController::class, 'observations'])->name('alpha.process.observations');
         Route::get('/process/follow-up', [FollowUpCandidateController::class, 'index'])->name('alpha.process.follow-up');
-        Route::get('/process/ilp', [ProcessController::class, 'ilp'])->name('alpha.process.ilp');
+        Route::get('/process/ilp', [ProcessPageController::class, 'ilp'])->name('alpha.process.ilp');
     });
 
     Route::middleware('role:super_admin,admin,teacher')->group(function (): void {
