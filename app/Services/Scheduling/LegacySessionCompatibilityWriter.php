@@ -37,6 +37,7 @@ class LegacySessionCompatibilityWriter
 
         if ($legacyId !== null && DB::table('class_sessions')->where('id', $legacyId)->exists()) {
             DB::table('class_sessions')->where('id', $legacyId)->update($payload);
+            $this->repairOccurrenceBookingMirrors($occurrence);
 
             return (int) $legacyId;
         }
@@ -54,6 +55,7 @@ class LegacySessionCompatibilityWriter
             'legacy_class_session_id' => $legacyId,
             'legacy_deleted_at' => null,
         ])->save();
+        $this->repairOccurrenceBookingMirrors($occurrence);
 
         return (int) $legacyId;
     }
@@ -61,16 +63,15 @@ class LegacySessionCompatibilityWriter
     public function syncBooking(ChildSessionBooking $booking): ?int
     {
         $booking->loadMissing('sessionOccurrence');
-        $legacySessionId = $booking->legacy_class_session_id
-            ?? $booking->sessionOccurrence?->legacy_class_session_id;
+        $legacySessionId = $this->resolveCompatibilitySessionId($booking);
 
-        if ($legacySessionId === null || ! DB::table('class_sessions')->where('id', $legacySessionId)->exists()) {
+        if ($legacySessionId === null) {
             return null;
         }
 
         if (! in_array($booking->status, self::MIRRORED_BOOKING_STATUSES, true)) {
             $this->removeBookingMirror($booking);
-            $this->pruneOrphanPivots((int) $legacySessionId);
+            $this->pruneOrphanPivots($legacySessionId);
 
             return null;
         }
@@ -104,13 +105,23 @@ class LegacySessionCompatibilityWriter
             'legacy_deleted_at' => null,
         ])->save();
 
-        $this->pruneOrphanPivots((int) $legacySessionId);
+        $this->pruneOrphanPivots($legacySessionId);
 
         return (int) $pivotId;
     }
 
     public function removeBookingMirror(ChildSessionBooking $booking): void
     {
+        $booking->loadMissing('sessionOccurrence');
+        $legacySessionIds = collect([
+            $booking->legacy_class_session_id,
+            $booking->sessionOccurrence?->legacy_class_session_id,
+        ])
+            ->filter(fn ($id): bool => $id !== null)
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
+
         $attendance = $this->attendanceFor($booking);
         if ($attendance && $attendance->marked_at === null) {
             $attendance->delete();
@@ -120,10 +131,18 @@ class LegacySessionCompatibilityWriter
             DB::table('class_session_student')
                 ->where('id', $booking->legacy_class_session_student_id)
                 ->delete();
-        } elseif ($booking->legacy_class_session_id !== null) {
+        }
+
+        foreach ($legacySessionIds as $legacySessionId) {
             DB::table('class_session_student')
-                ->where('class_session_id', $booking->legacy_class_session_id)
+                ->where('class_session_id', $legacySessionId)
                 ->where('student_id', $booking->student_id)
+                ->delete();
+
+            Attendance::query()
+                ->where('class_session_id', $legacySessionId)
+                ->where('student_id', $booking->student_id)
+                ->whereNull('marked_at')
                 ->delete();
         }
 
@@ -140,14 +159,18 @@ class LegacySessionCompatibilityWriter
             ]);
         }
 
-        $legacySessionId = $booking->legacy_class_session_id
-            ?? $booking->sessionOccurrence?->legacy_class_session_id;
+        $legacySessionId = $this->resolveCompatibilitySessionId($booking);
+        if ($legacySessionId === null) {
+            throw ValidationException::withMessages([
+                'booking_id' => 'Compatibility session untuk booking tidak ditemukan.',
+            ]);
+        }
 
         $attendance = Attendance::query()
             ->where('child_session_booking_id', $booking->id)
             ->first();
 
-        if (! $attendance && $legacySessionId !== null) {
+        if (! $attendance) {
             $attendance = Attendance::query()
                 ->where('class_session_id', $legacySessionId)
                 ->where('student_id', $booking->student_id)
@@ -208,6 +231,39 @@ class LegacySessionCompatibilityWriter
         ]);
     }
 
+    private function repairOccurrenceBookingMirrors(SessionOccurrence $occurrence): void
+    {
+        $bookings = ChildSessionBooking::query()
+            ->where('session_occurrence_id', $occurrence->id)
+            ->get();
+
+        foreach ($bookings as $booking) {
+            $this->syncBooking($booking);
+
+            if ($booking->status === 'scheduled') {
+                $this->ensureUnmarkedAttendance($booking);
+            }
+        }
+    }
+
+    private function resolveCompatibilitySessionId(ChildSessionBooking $booking): ?int
+    {
+        $booking->loadMissing('sessionOccurrence');
+        $occurrenceLegacyId = $booking->sessionOccurrence?->legacy_class_session_id;
+
+        if ($occurrenceLegacyId !== null
+            && DB::table('class_sessions')->where('id', $occurrenceLegacyId)->exists()) {
+            return (int) $occurrenceLegacyId;
+        }
+
+        if ($booking->legacy_class_session_id !== null
+            && DB::table('class_sessions')->where('id', $booking->legacy_class_session_id)->exists()) {
+            return (int) $booking->legacy_class_session_id;
+        }
+
+        return null;
+    }
+
     private function pruneOrphanPivots(int $legacySessionId): void
     {
         $desiredStudentIds = ChildSessionBooking::query()
@@ -256,14 +312,31 @@ class LegacySessionCompatibilityWriter
             ->where('child_session_booking_id', $booking->id)
             ->first();
 
-        if ($attendance || $booking->legacy_class_session_id === null) {
+        if ($attendance) {
             return $attendance;
         }
 
-        return Attendance::query()
-            ->where('class_session_id', $booking->legacy_class_session_id)
-            ->where('student_id', $booking->student_id)
-            ->first();
+        $legacySessionIds = collect([
+            $booking->sessionOccurrence?->legacy_class_session_id,
+            $booking->legacy_class_session_id,
+        ])
+            ->filter(fn ($id): bool => $id !== null)
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
+
+        foreach ($legacySessionIds as $legacySessionId) {
+            $attendance = Attendance::query()
+                ->where('class_session_id', $legacySessionId)
+                ->where('student_id', $booking->student_id)
+                ->first();
+
+            if ($attendance) {
+                return $attendance;
+            }
+        }
+
+        return null;
     }
 
     private function normalizeRoom(?string $room): ?string
