@@ -125,7 +125,7 @@
 
                                     <div>
                                         <button class="btn primary" type="submit" @disabled(! $candidate->indicator_id && $candidateIndicators->isEmpty())>
-                                            Konfirmasi & Buat Draft Support Plan
+                                            Konfirmasi &amp; Buat Draft Support Plan
                                         </button>
                                     </div>
                                 </form>
