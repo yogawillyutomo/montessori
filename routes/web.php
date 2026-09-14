@@ -7,6 +7,7 @@ use App\Http\Controllers\Alpha\DashboardController;
 use App\Http\Controllers\Alpha\DevelopmentProgressController;
 use App\Http\Controllers\Alpha\FamilyConferenceController;
 use App\Http\Controllers\Alpha\FollowUpCandidateController;
+use App\Http\Controllers\Alpha\IlpController;
 use App\Http\Controllers\Alpha\MasterController;
 use App\Http\Controllers\Alpha\ObservationController;
 use App\Http\Controllers\Alpha\PresentationController;
@@ -109,7 +110,7 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/observations', [ObservationController::class, 'store'])->name('alpha.observations.store');
         Route::post('/follow-up-candidates/{followUpCandidate}/confirm', [FollowUpCandidateController::class, 'confirm'])->name('alpha.follow-up-candidates.confirm');
         Route::post('/follow-up-candidates/{followUpCandidate}/dismiss', [FollowUpCandidateController::class, 'dismiss'])->name('alpha.follow-up-candidates.dismiss');
-        Route::patch('/process/ilp/{ilpPlan}', [ProcessController::class, 'updateIlp'])->name('alpha.process.ilp.update');
+        Route::patch('/process/ilp/{ilpPlan}', [IlpController::class, 'update'])->name('alpha.process.ilp.update');
         Route::post('/reports/generate', [ReportController::class, 'generate'])->name('alpha.reports.generate');
         Route::post('/reports/students/{student}/draft', [ReportController::class, 'buildStudentDraft'])->name('alpha.reports.students.draft');
         Route::post('/reports/cycles/{reportCycle}/students/{student}/eligibility', [ReportEligibilityController::class, 'evaluate'])->name('alpha.report-eligibility.evaluate');
