@@ -168,6 +168,7 @@
                         <td>
                             <div class="toolbar compact-actions">
                                 <a class="btn ghost" href="{{ route('alpha.reports.student', ['student' => $student, 'term_id' => $currentTerm->id]) }}">{{ $isParentView ? 'Buka Rapor' : 'Detail' }}</a>
+                                <a class="btn ghost" href="{{ route('alpha.family-conferences.index', $student) }}">Family Conference</a>
                                 @if (! $isParentView && $canGenerateReport)
                                     <form method="post" action="{{ route('alpha.reports.students.draft', ['student' => $student, 'term_id' => $currentTerm->id]) }}">
                                         @csrf
