@@ -70,6 +70,7 @@ class ReportPolicyCycleTest extends TestCase
             $this->assertSame(60, $policy->fresh()->minimum_observation_days);
         }
 
+        $policy = $policy->fresh();
         $policy->update(['is_active' => false]);
         $this->assertFalse($policy->fresh()->is_active);
     }
@@ -113,12 +114,16 @@ class ReportPolicyCycleTest extends TestCase
             $this->assertSame('closed', $cycle->fresh()->status);
         }
 
+        $cycle = $cycle->fresh();
+
         try {
             $cycle->update(['cutoff_date' => '2026-09-29']);
             $this->fail('Closed cycle dates must be immutable.');
         } catch (ValidationException) {
             $this->assertSame('2026-09-30', $cycle->fresh()->cutoff_date->toDateString());
         }
+
+        $cycle = $cycle->fresh();
 
         $this->expectException(LogicException::class);
         $cycle->delete();
