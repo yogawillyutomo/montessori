@@ -38,9 +38,11 @@ class ChildBookingCancellationService
                 ]);
             }
 
-            if ($this->evidence->hasAnyMarkedAttendance($locked) || $this->evidence->hasObservationEvidence($locked)) {
+            if ($this->evidence->hasAnyMarkedAttendance($locked)
+                || $this->evidence->hasObservationEvidence($locked)
+                || $this->evidence->hasPresentationEvidence($locked)) {
                 throw ValidationException::withMessages([
-                    'booking_id' => 'Booking yang sudah memiliki presensi atau observasi tidak boleh dibatalkan sebagai child cancellation.',
+                    'booking_id' => 'Booking yang sudah memiliki attendance, observation, atau presentation evidence tidak boleh dibatalkan sebagai child cancellation.',
                 ]);
             }
 
