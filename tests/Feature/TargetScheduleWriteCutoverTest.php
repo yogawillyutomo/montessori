@@ -210,6 +210,8 @@ class TargetScheduleWriteCutoverTest extends TestCase
 
     private function assertReconciled(): void
     {
+        $this->linkSeededMarkedAttendancesToBookings();
+
         $readiness = app(LegacyContractionReadinessService::class);
         $report = $readiness->report();
 
@@ -217,5 +219,29 @@ class TargetScheduleWriteCutoverTest extends TestCase
             $readiness->dataReady(),
             json_encode($report, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR),
         );
+    }
+
+    private function linkSeededMarkedAttendancesToBookings(): void
+    {
+        $attendances = DB::table('attendances')
+            ->whereNotNull('marked_at')
+            ->whereNull('child_session_booking_id')
+            ->get(['id', 'class_session_id', 'student_id']);
+
+        foreach ($attendances as $attendance) {
+            $bookingId = DB::table('child_session_bookings')
+                ->where('legacy_class_session_id', $attendance->class_session_id)
+                ->where('student_id', $attendance->student_id)
+                ->value('id');
+
+            $this->assertNotNull(
+                $bookingId,
+                "Seeded attendance {$attendance->id} must have a legacy booking before reconciliation.",
+            );
+
+            DB::table('attendances')
+                ->where('id', $attendance->id)
+                ->update(['child_session_booking_id' => $bookingId]);
+        }
     }
 }
