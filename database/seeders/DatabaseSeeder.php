@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\AcademicYear;
 use App\Models\Attendance;
+use App\Models\ChildSessionBooking;
 use App\Models\ClassLevel;
 use App\Models\ClassSession;
 use App\Models\DevelopmentArea;
@@ -20,6 +21,7 @@ use App\Models\User;
 use App\Models\WeeklySchedule;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
+use RuntimeException;
 
 class DatabaseSeeder extends Seeder
 {
@@ -402,42 +404,59 @@ class DatabaseSeeder extends Seeder
             'infant_friday' => '2026-06-05',
         ];
 
-        $sessions = [];
-        foreach ($sessionDates as $key => $date) {
-            $schedule = $schedules[$key]['model'];
-            $session = ClassSession::query()->updateOrCreate([
-                'school_class_id' => $schedule->school_class_id,
-                'session_date' => $date,
-                'starts_at' => $schedule->starts_at,
-                'ends_at' => $schedule->ends_at,
-                'room' => $schedule->room,
-            ], [
-                'weekly_schedule_id' => $schedule->id,
-                'school_class_id' => $schedule->school_class_id,
-                'teacher_id' => $schedule->teacher_id,
-                'room' => $schedule->room,
-                'capacity' => $schedule->capacity ?: $schedule->schoolClass->capacity,
-                'session_date' => $date,
-                'starts_at' => $schedule->starts_at,
-                'ends_at' => $schedule->ends_at,
-                'topic' => $schedule->topic,
-                'status' => 'completed',
-            ]);
-            $studentIds = $schedule->students()->pluck('students.id')->all();
-            $session->students()->sync($studentIds);
+        $previousSessionWriteSource = config('montessori.session.write_source', 'target');
+        config()->set('montessori.session.write_source', 'legacy');
 
-            foreach ($studentIds as $studentId) {
-                Attendance::query()->updateOrCreate([
-                    'class_session_id' => $session->id,
-                    'student_id' => $studentId,
+        try {
+            $sessions = [];
+            foreach ($sessionDates as $key => $date) {
+                $schedule = $schedules[$key]['model'];
+                $session = ClassSession::query()->updateOrCreate([
+                    'school_class_id' => $schedule->school_class_id,
+                    'session_date' => $date,
+                    'starts_at' => $schedule->starts_at,
+                    'ends_at' => $schedule->ends_at,
+                    'room' => $schedule->room,
                 ], [
-                    'status' => 'present',
-                    'marked_by' => $schedule->teacher?->user_id ?? $users['admin']->id,
-                    'marked_at' => now(),
+                    'weekly_schedule_id' => $schedule->id,
+                    'school_class_id' => $schedule->school_class_id,
+                    'teacher_id' => $schedule->teacher_id,
+                    'room' => $schedule->room,
+                    'capacity' => $schedule->capacity ?: $schedule->schoolClass->capacity,
+                    'session_date' => $date,
+                    'starts_at' => $schedule->starts_at,
+                    'ends_at' => $schedule->ends_at,
+                    'topic' => $schedule->topic,
+                    'status' => 'completed',
                 ]);
-            }
+                $studentIds = $schedule->students()->pluck('students.id')->all();
+                $session->students()->sync($studentIds);
 
-            $sessions[$key] = $session;
+                foreach ($studentIds as $studentId) {
+                    $bookingId = ChildSessionBooking::query()
+                        ->where('legacy_class_session_id', $session->id)
+                        ->where('student_id', $studentId)
+                        ->value('id');
+
+                    if ($bookingId === null) {
+                        throw new RuntimeException("Seeded session {$session->id} student {$studentId} is missing its canonical ChildSessionBooking.");
+                    }
+
+                    Attendance::query()->updateOrCreate([
+                        'class_session_id' => $session->id,
+                        'student_id' => $studentId,
+                    ], [
+                        'child_session_booking_id' => $bookingId,
+                        'status' => 'present',
+                        'marked_by' => $schedule->teacher?->user_id ?? $users['admin']->id,
+                        'marked_at' => now(),
+                    ]);
+                }
+
+                $sessions[$key] = $session;
+            }
+        } finally {
+            config()->set('montessori.session.write_source', $previousSessionWriteSource);
         }
 
         $observationRows = [
