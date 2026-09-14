@@ -20,6 +20,7 @@ use App\Support\Alpha\Role;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use stdClass;
 
 class ReportController extends Controller
 {
@@ -170,7 +171,7 @@ class ReportController extends Controller
             'term' => $report->term,
             'reportCycle' => $report->reportCycle,
             'attendance' => $displayReport->manualAttendanceSummary(),
-            'observationSummary' => $summaryObservation,
+            'observationSummary' => $this->observationSummaryForView($summaryObservation),
             'statusLabels' => $this->statusLabels(),
         ]);
     }
@@ -236,6 +237,7 @@ class ReportController extends Controller
                 ? $observationSummary->summarizeForCycle($student, $report->reportCycle)
                 : $observationSummary->summarizeForStudent($student, $term);
         }
+        $summaryObservation = $this->observationSummaryForView($summaryObservation);
 
         return view('alpha.report-student', [
             ...$this->shell($request, 'reports'),
@@ -274,6 +276,62 @@ class ReportController extends Controller
             'canArchiveCycleReport' => $isCycleReport && $isPublisher && $workingStatus === 'published',
             'isParentView' => $user->role === Role::PARENT,
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $summary
+     * @return array<string, mixed>
+     */
+    private function observationSummaryForView(array $summary): array
+    {
+        $summary['latest'] = collect($summary['latest'] ?? [])
+            ->map(function ($observation) {
+                if ($observation instanceof \App\Models\Observation) {
+                    return $observation;
+                }
+
+                $data = (array) $observation;
+                $level = $data['level'] ?? $data['status'] ?? null;
+                $view = new stdClass;
+                $view->developmentArea = $this->nestedObject($data['development_area'] ?? $data['developmentArea'] ?? null);
+                $view->indicator = $this->nestedObject($data['indicator'] ?? null);
+                $view->teacher = $this->nestedObject($data['teacher'] ?? null);
+                $view->observed_on = ! empty($data['observed_on'])
+                    ? \Illuminate\Support\Carbon::parse($data['observed_on'])
+                    : null;
+                $view->level_label = $data['level_label']
+                    ?? \App\Models\Observation::LEVELS[$level]
+                    ?? $level
+                    ?? '-';
+                $view->level_badge_class = $data['level_badge_class']
+                    ?? 'status-'.str_replace('_', '-', $level ?? 'empty');
+                $view->note = $data['note'] ?? null;
+
+                return $view;
+            })
+            ->all();
+
+        return $summary;
+    }
+
+    private function nestedObject(mixed $value): ?stdClass
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        if (is_object($value)) {
+            return $value;
+        }
+
+        $object = new stdClass;
+        foreach ((array) $value as $key => $nestedValue) {
+            $object->{$key} = is_array($nestedValue)
+                ? $this->nestedObject($nestedValue)
+                : $nestedValue;
+        }
+
+        return $object;
     }
 
     /**
