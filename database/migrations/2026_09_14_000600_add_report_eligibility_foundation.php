@@ -19,10 +19,10 @@ return new class extends Migration
             $table->unsignedInteger('covered_area_count')->default(0);
             $table->unsignedInteger('required_area_count')->default(0);
             $table->boolean('is_first_report_gate')->default(true);
-            $table->foreignId('guide_confirmed_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('guide_confirmed_by')->nullable()->constrained('users')->restrictOnDelete();
             $table->timestamp('guide_confirmed_at')->nullable();
             $table->text('guide_confirmation_note')->nullable();
-            $table->foreignId('override_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('override_by')->nullable()->constrained('users')->restrictOnDelete();
             $table->timestamp('override_at')->nullable();
             $table->text('override_reason')->nullable();
             $table->timestamp('evaluated_at');
