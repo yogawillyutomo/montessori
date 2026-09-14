@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Validation\ValidationException;
 use LogicException;
 
@@ -123,6 +124,10 @@ class ReportCycle extends Model
             if ($persistedStatus === 'closed') {
                 throw new LogicException('Report cycle yang sudah ditutup tidak boleh dihapus.');
             }
+
+            if ($cycle->eligibilities()->exists()) {
+                throw new LogicException('Report cycle yang sudah memiliki eligibility decision tidak boleh dihapus.');
+            }
         });
     }
 
@@ -138,5 +143,10 @@ class ReportCycle extends Model
     public function reportPolicy(): BelongsTo
     {
         return $this->belongsTo(ReportPolicy::class);
+    }
+
+    public function eligibilities(): HasMany
+    {
+        return $this->hasMany(ReportEligibility::class);
     }
 }
