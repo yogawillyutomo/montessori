@@ -5,6 +5,7 @@ use App\Http\Controllers\Alpha\AuthController;
 use App\Http\Controllers\Alpha\CycleReportController;
 use App\Http\Controllers\Alpha\DashboardController;
 use App\Http\Controllers\Alpha\DevelopmentProgressController;
+use App\Http\Controllers\Alpha\FamilyConferenceController;
 use App\Http\Controllers\Alpha\FollowUpCandidateController;
 use App\Http\Controllers\Alpha\MasterController;
 use App\Http\Controllers\Alpha\ObservationController;
@@ -115,6 +116,9 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/reports/cycles/{reportCycle}/students/{student}/draft', [CycleReportController::class, 'draft'])->name('alpha.cycle-reports.draft');
         Route::patch('/cycle-reports/{report}', [CycleReportController::class, 'update'])->name('alpha.cycle-reports.update');
         Route::post('/cycle-reports/{report}/submit', [CycleReportController::class, 'submit'])->name('alpha.cycle-reports.submit');
+
+        Route::post('/students/{student}/family-conferences', [FamilyConferenceController::class, 'store'])->name('alpha.family-conferences.store');
+        Route::patch('/family-conferences/{familyConference}', [FamilyConferenceController::class, 'update'])->name('alpha.family-conferences.update');
     });
 
     Route::middleware('role:super_admin,principal')->group(function (): void {
@@ -128,6 +132,7 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/reports/students/{student}', [ReportController::class, 'student'])->name('alpha.reports.student');
         Route::get('/reports/{report}/print', [ReportController::class, 'print'])->name('alpha.reports.print');
         Route::get('/reports/{report}', [ReportController::class, 'show'])->name('alpha.reports.show');
+        Route::get('/students/{student}/family-conferences', [FamilyConferenceController::class, 'index'])->name('alpha.family-conferences.index');
     });
 
     Route::middleware('role:super_admin,admin,teacher,principal')->group(function (): void {
