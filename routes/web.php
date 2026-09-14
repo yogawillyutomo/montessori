@@ -11,7 +11,7 @@ use App\Http\Controllers\Alpha\DevelopmentProgressController;
 use App\Http\Controllers\Alpha\FamilyConferenceController;
 use App\Http\Controllers\Alpha\FollowUpCandidateController;
 use App\Http\Controllers\Alpha\IlpController;
-use App\Http\Controllers\Alpha\MasterController;
+use App\Http\Controllers\Alpha\MasterPageController;
 use App\Http\Controllers\Alpha\ObservationController;
 use App\Http\Controllers\Alpha\PresentationController;
 use App\Http\Controllers\Alpha\ProcessPageController;
@@ -37,14 +37,14 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/', DashboardController::class)->name('alpha.dashboard');
 
     Route::middleware('role:super_admin,admin')->group(function (): void {
-        Route::get('/master', [MasterController::class, 'academicYears'])->name('alpha.master');
-        Route::get('/master/academic-years', [MasterController::class, 'academicYears'])->name('alpha.master.academic-years');
-        Route::get('/master/classes', [MasterController::class, 'classes'])->name('alpha.master.classes');
-        Route::get('/master/levels', [MasterController::class, 'levels'])->name('alpha.master.levels');
-        Route::get('/master/students', [MasterController::class, 'students'])->name('alpha.master.students');
-        Route::get('/master/teachers', [MasterController::class, 'teachers'])->name('alpha.master.teachers');
-        Route::get('/master/curriculum', [MasterController::class, 'curriculum'])->name('alpha.master.curriculum');
-        Route::get('/master/import-template/{type}', [MasterController::class, 'downloadImportTemplate'])->name('alpha.master.import-template');
+        Route::get('/master', [MasterPageController::class, 'academicYears'])->name('alpha.master');
+        Route::get('/master/academic-years', [MasterPageController::class, 'academicYears'])->name('alpha.master.academic-years');
+        Route::get('/master/classes', [MasterPageController::class, 'classes'])->name('alpha.master.classes');
+        Route::get('/master/levels', [MasterPageController::class, 'levels'])->name('alpha.master.levels');
+        Route::get('/master/students', [MasterPageController::class, 'students'])->name('alpha.master.students');
+        Route::get('/master/teachers', [MasterPageController::class, 'teachers'])->name('alpha.master.teachers');
+        Route::get('/master/curriculum', [MasterPageController::class, 'curriculum'])->name('alpha.master.curriculum');
+        Route::get('/master/import-template/{type}', [MasterPageController::class, 'downloadImportTemplate'])->name('alpha.master.import-template');
 
         Route::post('/master/classes', [ClassStructureController::class, 'storeClass'])->name('alpha.master.classes.store');
         Route::post('/master/levels', [ClassStructureController::class, 'storeLevel'])->name('alpha.master.levels.store');
