@@ -290,6 +290,19 @@ class TargetSessionWriteService
 
         $existingIds = $active->keys()->map(fn ($id): int => (int) $id)->all();
         foreach (array_diff($studentIds, $existingIds) as $studentId) {
+            $terminalBooking = ChildSessionBooking::query()
+                ->where('session_occurrence_id', $occurrence->id)
+                ->where('student_id', (int) $studentId)
+                ->whereNotIn('status', ChildSessionBooking::ACTIVE_STATUSES)
+                ->lockForUpdate()
+                ->first();
+
+            if ($terminalBooking) {
+                throw ValidationException::withMessages([
+                    'student_ids' => 'Booking historis terminal tidak boleh diaktifkan kembali melalui generic roster update. Gunakan workflow reschedule atau makeup yang eksplisit.',
+                ]);
+            }
+
             $booking = ChildSessionBooking::query()->create([
                 'student_id' => (int) $studentId,
                 'session_occurrence_id' => $occurrence->id,
