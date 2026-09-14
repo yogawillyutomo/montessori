@@ -7,6 +7,7 @@ use App\Http\Controllers\Alpha\AttendanceController;
 use App\Http\Controllers\Alpha\ClassStructureController;
 use App\Http\Controllers\Alpha\CurriculumController;
 use App\Http\Controllers\Alpha\IlpController;
+use App\Http\Controllers\Alpha\MasterPageController;
 use App\Http\Controllers\Alpha\ProcessPageController;
 use App\Http\Controllers\Alpha\SessionController;
 use App\Http\Controllers\Alpha\StudentGuardianController;
@@ -183,6 +184,35 @@ class ControllerBoundaryTest extends TestCase
             $route = Route::getRoutes()->getByName($routeName);
             $this->assertNotNull($route, "Route {$routeName} harus tetap tersedia.");
             $this->assertSame($action, $route->getActionName());
+        }
+    }
+
+    public function test_master_read_routes_use_master_page_controller_and_legacy_controller_is_retired(): void
+    {
+        $expected = [
+            'alpha.master' => [MasterPageController::class.'@academicYears', 'master'],
+            'alpha.master.academic-years' => [MasterPageController::class.'@academicYears', 'master/academic-years'],
+            'alpha.master.classes' => [MasterPageController::class.'@classes', 'master/classes'],
+            'alpha.master.levels' => [MasterPageController::class.'@levels', 'master/levels'],
+            'alpha.master.students' => [MasterPageController::class.'@students', 'master/students'],
+            'alpha.master.teachers' => [MasterPageController::class.'@teachers', 'master/teachers'],
+            'alpha.master.curriculum' => [MasterPageController::class.'@curriculum', 'master/curriculum'],
+            'alpha.master.import-template' => [MasterPageController::class.'@downloadImportTemplate', 'master/import-template/{type}'],
+        ];
+
+        foreach ($expected as $routeName => [$action, $uri]) {
+            $route = Route::getRoutes()->getByName($routeName);
+            $this->assertNotNull($route, "Route {$routeName} harus tetap tersedia.");
+            $this->assertSame($action, $route->getActionName());
+            $this->assertSame($uri, $route->uri());
+        }
+
+        foreach (Route::getRoutes() as $route) {
+            $this->assertStringNotContainsString(
+                'MasterController@',
+                $route->getActionName(),
+                "Route {$route->getName()} masih terhubung ke MasterController legacy.",
+            );
         }
     }
 }
