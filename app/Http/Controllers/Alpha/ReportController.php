@@ -6,6 +6,8 @@ use App\Http\Controllers\Alpha\Concerns\ProvidesAlphaShell;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Alpha\Report\SaveStudentReportRequest;
 use App\Models\Report;
+use App\Models\ReportCycle;
+use App\Models\ReportEligibility;
 use App\Models\SchoolClass;
 use App\Models\Student;
 use App\Models\Teacher;
@@ -244,6 +246,7 @@ class ReportController extends Controller
             'workingReport' => $report,
             'reportCycle' => $report?->reportCycle,
             'isCycleReport' => $isCycleReport,
+            'cycleRows' => $user->role === Role::PARENT ? [] : $this->cycleRowsForStudent($student),
             'reportStatus' => $displayReport?->status ?? 'not_created',
             'workingReportStatus' => $workingStatus,
             'observationSummary' => $summaryObservation,
@@ -257,6 +260,7 @@ class ReportController extends Controller
                 'attendance_rate' => 0,
             ],
             'canBuildDraft' => ! $isCycleReport && $canGenerate && ! $isPublished,
+            'canGenerateCycleReport' => $canGenerate,
             'canEditReport' => $isCycleReport
                 ? $canGenerate && $isEditableCycleState
                 : $user->role !== Role::PARENT && ! $isPublished,
@@ -270,6 +274,55 @@ class ReportController extends Controller
             'canArchiveCycleReport' => $isCycleReport && $isPublisher && $workingStatus === 'published',
             'isParentView' => $user->role === Role::PARENT,
         ]);
+    }
+
+    /**
+     * @return array<int, array{cycle: ReportCycle, report: ?Report, eligibility: ?ReportEligibility}>
+     */
+    private function cycleRowsForStudent(Student $student): array
+    {
+        $enrollments = $student->childEnrollments()->get();
+        if ($enrollments->isEmpty()) {
+            return [];
+        }
+
+        $enrollmentIds = $enrollments->pluck('id')->all();
+        $levelIds = $enrollments->pluck('class_level_id')->unique()->values()->all();
+        $reports = Report::query()
+            ->where('student_id', $student->id)
+            ->whereNotNull('report_cycle_id')
+            ->get()
+            ->keyBy('report_cycle_id');
+        $eligibilities = ReportEligibility::query()
+            ->whereIn('child_enrollment_id', $enrollmentIds)
+            ->latest('evaluated_at')
+            ->get()
+            ->groupBy('report_cycle_id')
+            ->map(fn ($rows) => $rows->first());
+
+        return ReportCycle::query()
+            ->with('reportPolicy')
+            ->whereHas('reportPolicy', fn ($query) => $query->whereIn('class_level_id', $levelIds))
+            ->orderByDesc('cutoff_date')
+            ->get()
+            ->filter(function (ReportCycle $cycle) use ($enrollments): bool {
+                return $enrollments->contains(function ($enrollment) use ($cycle): bool {
+                    if ((int) $enrollment->class_level_id !== (int) $cycle->reportPolicy->class_level_id) {
+                        return false;
+                    }
+
+                    return $enrollment->starts_on->toDateString() <= $cycle->cutoff_date->toDateString()
+                        && ($enrollment->ends_on === null
+                            || $enrollment->ends_on->toDateString() >= $cycle->window_start->toDateString());
+                });
+            })
+            ->map(fn (ReportCycle $cycle): array => [
+                'cycle' => $cycle,
+                'report' => $reports->get($cycle->id),
+                'eligibility' => $eligibilities->get($cycle->id),
+            ])
+            ->values()
+            ->all();
     }
 
     private function termFromRequest(Request $request): Term
