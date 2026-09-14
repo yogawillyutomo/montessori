@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Http\Controllers\Alpha\AcademicCalendarController;
 use App\Http\Controllers\Alpha\AttendanceController;
 use App\Http\Controllers\Alpha\ClassStructureController;
+use App\Http\Controllers\Alpha\CurriculumController;
 use App\Http\Controllers\Alpha\IlpController;
 use App\Http\Controllers\Alpha\ProcessPageController;
 use App\Http\Controllers\Alpha\SessionController;
@@ -27,7 +28,6 @@ class ControllerBoundaryTest extends TestCase
 
         foreach ($expected as $routeName => $action) {
             $route = Route::getRoutes()->getByName($routeName);
-
             $this->assertNotNull($route, "Route {$routeName} harus tetap tersedia.");
             $this->assertSame($action, $route->getActionName());
         }
@@ -45,13 +45,11 @@ class ControllerBoundaryTest extends TestCase
 
         foreach ($expected as $routeName => $action) {
             $route = Route::getRoutes()->getByName($routeName);
-
             $this->assertNotNull($route, "Route {$routeName} harus tetap tersedia.");
             $this->assertSame($action, $route->getActionName());
         }
 
         $attendance = Route::getRoutes()->getByName('alpha.process.sessions.attendance');
-
         $this->assertNotNull($attendance);
         $this->assertSame(AttendanceController::class.'@update', $attendance->getActionName());
     }
@@ -59,7 +57,6 @@ class ControllerBoundaryTest extends TestCase
     public function test_ilp_mutation_uses_dedicated_controller(): void
     {
         $update = Route::getRoutes()->getByName('alpha.process.ilp.update');
-
         $this->assertNotNull($update);
         $this->assertSame(IlpController::class.'@update', $update->getActionName());
         $this->assertSame('process/ilp/{ilpPlan}', $update->uri());
@@ -78,7 +75,6 @@ class ControllerBoundaryTest extends TestCase
 
         foreach ($expected as $routeName => [$action, $uri]) {
             $route = Route::getRoutes()->getByName($routeName);
-
             $this->assertNotNull($route, "Route {$routeName} harus tetap tersedia.");
             $this->assertSame($action, $route->getActionName());
             $this->assertSame($uri, $route->uri());
@@ -108,7 +104,6 @@ class ControllerBoundaryTest extends TestCase
 
         foreach ($expected as $routeName => $action) {
             $route = Route::getRoutes()->getByName($routeName);
-
             $this->assertNotNull($route, "Route {$routeName} harus tetap tersedia.");
             $this->assertSame($action, $route->getActionName());
         }
@@ -130,7 +125,6 @@ class ControllerBoundaryTest extends TestCase
 
         foreach ($expected as $routeName => $action) {
             $route = Route::getRoutes()->getByName($routeName);
-
             $this->assertNotNull($route, "Route {$routeName} harus tetap tersedia.");
             $this->assertSame($action, $route->getActionName());
         }
@@ -150,7 +144,6 @@ class ControllerBoundaryTest extends TestCase
 
         foreach ($expected as $routeName => $action) {
             $route = Route::getRoutes()->getByName($routeName);
-
             $this->assertNotNull($route, "Route {$routeName} harus tetap tersedia.");
             $this->assertSame($action, $route->getActionName());
         }
@@ -168,7 +161,26 @@ class ControllerBoundaryTest extends TestCase
 
         foreach ($expected as $routeName => $action) {
             $route = Route::getRoutes()->getByName($routeName);
+            $this->assertNotNull($route, "Route {$routeName} harus tetap tersedia.");
+            $this->assertSame($action, $route->getActionName());
+        }
+    }
 
+    public function test_curriculum_mutations_use_dedicated_controller(): void
+    {
+        $expected = [
+            'alpha.master.areas.store' => CurriculumController::class.'@storeArea',
+            'alpha.master.areas.update' => CurriculumController::class.'@updateArea',
+            'alpha.master.areas.destroy' => CurriculumController::class.'@destroyArea',
+            'alpha.master.indicators.store' => CurriculumController::class.'@storeIndicator',
+            'alpha.master.indicators.import' => CurriculumController::class.'@importIndicators',
+            'alpha.master.indicators.update' => CurriculumController::class.'@updateIndicator',
+            'alpha.master.indicators.toggle' => CurriculumController::class.'@toggleIndicator',
+            'alpha.master.indicators.destroy' => CurriculumController::class.'@destroyIndicator',
+        ];
+
+        foreach ($expected as $routeName => $action) {
+            $route = Route::getRoutes()->getByName($routeName);
             $this->assertNotNull($route, "Route {$routeName} harus tetap tersedia.");
             $this->assertSame($action, $route->getActionName());
         }
