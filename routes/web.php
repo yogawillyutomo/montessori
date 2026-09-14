@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Alpha\AcademicCalendarController;
 use App\Http\Controllers\Alpha\AttendanceController;
 use App\Http\Controllers\Alpha\AuthController;
 use App\Http\Controllers\Alpha\CycleReportController;
@@ -43,14 +44,14 @@ Route::middleware('auth')->group(function (): void {
 
         Route::post('/master/classes', [MasterController::class, 'storeClass'])->name('alpha.master.classes.store');
         Route::post('/master/levels', [MasterController::class, 'storeLevel'])->name('alpha.master.levels.store');
-        Route::post('/master/academic-years', [MasterController::class, 'storeAcademicYear'])->name('alpha.master.academic-years.store');
-        Route::patch('/master/academic-years/{academicYear}', [MasterController::class, 'updateAcademicYear'])->name('alpha.master.academic-years.update');
-        Route::patch('/master/academic-years/{academicYear}/activate', [MasterController::class, 'activateAcademicYear'])->name('alpha.master.academic-years.activate');
-        Route::delete('/master/academic-years/{academicYear}', [MasterController::class, 'destroyAcademicYear'])->name('alpha.master.academic-years.destroy');
-        Route::post('/master/terms', [MasterController::class, 'storeTerm'])->name('alpha.master.terms.store');
-        Route::patch('/master/terms/{term}', [MasterController::class, 'updateTerm'])->name('alpha.master.terms.update');
-        Route::patch('/master/terms/{term}/current', [MasterController::class, 'activateTerm'])->name('alpha.master.terms.activate');
-        Route::delete('/master/terms/{term}', [MasterController::class, 'destroyTerm'])->name('alpha.master.terms.destroy');
+        Route::post('/master/academic-years', [AcademicCalendarController::class, 'storeAcademicYear'])->name('alpha.master.academic-years.store');
+        Route::patch('/master/academic-years/{academicYear}', [AcademicCalendarController::class, 'updateAcademicYear'])->name('alpha.master.academic-years.update');
+        Route::patch('/master/academic-years/{academicYear}/activate', [AcademicCalendarController::class, 'activateAcademicYear'])->name('alpha.master.academic-years.activate');
+        Route::delete('/master/academic-years/{academicYear}', [AcademicCalendarController::class, 'destroyAcademicYear'])->name('alpha.master.academic-years.destroy');
+        Route::post('/master/terms', [AcademicCalendarController::class, 'storeTerm'])->name('alpha.master.terms.store');
+        Route::patch('/master/terms/{term}', [AcademicCalendarController::class, 'updateTerm'])->name('alpha.master.terms.update');
+        Route::patch('/master/terms/{term}/current', [AcademicCalendarController::class, 'activateTerm'])->name('alpha.master.terms.activate');
+        Route::delete('/master/terms/{term}', [AcademicCalendarController::class, 'destroyTerm'])->name('alpha.master.terms.destroy');
         Route::patch('/master/classes/{schoolClass}', [MasterController::class, 'updateClass'])->name('alpha.master.classes.update');
         Route::post('/master/classes/{schoolClass}/copy', [MasterController::class, 'duplicateClass'])->name('alpha.master.classes.copy');
         Route::patch('/master/classes/{schoolClass}/toggle', [MasterController::class, 'toggleClass'])->name('alpha.master.classes.toggle');

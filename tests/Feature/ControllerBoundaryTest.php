@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Alpha\AcademicCalendarController;
 use App\Http\Controllers\Alpha\AttendanceController;
 use App\Http\Controllers\Alpha\IlpController;
 use App\Http\Controllers\Alpha\ProcessPageController;
@@ -86,6 +87,27 @@ class ControllerBoundaryTest extends TestCase
                 $route->getActionName(),
                 "Route {$route->getName()} masih terhubung ke ProcessController legacy.",
             );
+        }
+    }
+
+    public function test_academic_calendar_mutations_use_dedicated_controller(): void
+    {
+        $expected = [
+            'alpha.master.academic-years.store' => AcademicCalendarController::class.'@storeAcademicYear',
+            'alpha.master.academic-years.update' => AcademicCalendarController::class.'@updateAcademicYear',
+            'alpha.master.academic-years.activate' => AcademicCalendarController::class.'@activateAcademicYear',
+            'alpha.master.academic-years.destroy' => AcademicCalendarController::class.'@destroyAcademicYear',
+            'alpha.master.terms.store' => AcademicCalendarController::class.'@storeTerm',
+            'alpha.master.terms.update' => AcademicCalendarController::class.'@updateTerm',
+            'alpha.master.terms.activate' => AcademicCalendarController::class.'@activateTerm',
+            'alpha.master.terms.destroy' => AcademicCalendarController::class.'@destroyTerm',
+        ];
+
+        foreach ($expected as $routeName => $action) {
+            $route = Route::getRoutes()->getByName($routeName);
+
+            $this->assertNotNull($route, "Route {$routeName} harus tetap tersedia.");
+            $this->assertSame($action, $route->getActionName());
         }
     }
 }
