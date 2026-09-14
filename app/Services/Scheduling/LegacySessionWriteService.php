@@ -5,6 +5,7 @@ namespace App\Services\Scheduling;
 use App\Models\BookingMovement;
 use App\Models\ChildSessionBooking;
 use App\Models\ClassSession;
+use App\Models\Presentation;
 use App\Models\SessionOccurrence;
 use App\Models\User;
 use App\Models\WeeklySchedule;
@@ -81,6 +82,16 @@ class LegacySessionWriteService
     public function update(ClassSession $session, array $attributes, array $studentIds): ClassSession
     {
         return DB::transaction(function () use ($session, $attributes, $studentIds): ClassSession {
+            if ($session->status !== 'planned' || ($attributes['status'] ?? 'planned') !== 'planned') {
+                throw ValidationException::withMessages([
+                    'status' => 'Rollback legacy hanya boleh melakukan structural update pada planned session. Gunakan workflow close atau cancellation untuk lifecycle state.',
+                ]);
+            }
+
+            $studentIds = collect($studentIds)->map(fn ($id): int => (int) $id)->unique()->values()->all();
+            $currentStudentIds = $session->students()->pluck('students.id')->map(fn ($id): int => (int) $id)->all();
+            $removedStudentIds = array_values(array_diff($currentStudentIds, $studentIds));
+
             $this->validateTime($attributes, $session);
             $this->validateStudents($attributes, $studentIds, $session);
 
@@ -89,6 +100,52 @@ class LegacySessionWriteService
                 throw ValidationException::withMessages([
                     'student_ids' => 'Siswa yang sudah memiliki observasi tidak bisa dikeluarkan dari presensi.',
                 ]);
+            }
+
+            if ($removedStudentIds !== []) {
+                $hasMarkedAttendance = $session->attendances()
+                    ->whereIn('student_id', $removedStudentIds)
+                    ->whereNotNull('marked_at')
+                    ->exists();
+                if ($hasMarkedAttendance) {
+                    throw ValidationException::withMessages([
+                        'student_ids' => 'Siswa yang sudah memiliki marked attendance tidak boleh dikeluarkan dari roster rollback.',
+                    ]);
+                }
+
+                $occurrence = SessionOccurrence::query()
+                    ->where('legacy_class_session_id', $session->id)
+                    ->first();
+                if ($occurrence) {
+                    if (Presentation::query()
+                        ->where('session_occurrence_id', $occurrence->id)
+                        ->whereIn('student_id', $removedStudentIds)
+                        ->exists()) {
+                        throw ValidationException::withMessages([
+                            'student_ids' => 'Siswa yang sudah memiliki presentation evidence tidak boleh dikeluarkan dari roster rollback.',
+                        ]);
+                    }
+
+                    $bookings = ChildSessionBooking::query()
+                        ->where('session_occurrence_id', $occurrence->id)
+                        ->whereIn('student_id', $removedStudentIds)
+                        ->get();
+
+                    foreach ($bookings as $booking) {
+                        $hasMovement = BookingMovement::query()
+                            ->where('source_booking_id', $booking->id)
+                            ->orWhere('destination_booking_id', $booking->id)
+                            ->exists();
+
+                        if ($booking->status !== 'scheduled'
+                            || $booking->session_credit_id !== null
+                            || $hasMovement) {
+                            throw ValidationException::withMessages([
+                                'student_ids' => 'Canonical booking memiliki terminal history, credit, atau movement dan tidak boleh dilepas lewat rollback roster update.',
+                            ]);
+                        }
+                    }
+                }
             }
 
             $session->update($attributes);
@@ -117,6 +174,19 @@ class LegacySessionWriteService
     {
         $session->loadMissing(['students', 'attendances', 'observations']);
         $recap = $session->attendanceRecap();
+
+        if ($session->status === 'cancelled') {
+            throw ValidationException::withMessages([
+                'session' => 'Session cancelled tidak boleh ditutup sebagai completed melalui rollback legacy.',
+            ]);
+        }
+
+        if ($session->status === 'completed') {
+            $session->update($notes);
+
+            return (int) $recap['unmarked'];
+        }
+
         $session->update([
             ...$notes,
             'status' => 'completed',
