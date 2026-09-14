@@ -209,11 +209,26 @@ class LegacySessionCompatibilityWriter
             return;
         }
 
+        $legacySessionId = (int) $occurrence->legacy_class_session_id;
+        $hasMarkedAttendance = Attendance::query()
+            ->where('class_session_id', $legacySessionId)
+            ->whereNotNull('marked_at')
+            ->exists();
+        $hasObservation = DB::table('observations')
+            ->where('class_session_id', $legacySessionId)
+            ->exists();
+
+        if ($hasMarkedAttendance || $hasObservation || $occurrence->presentations()->exists()) {
+            throw ValidationException::withMessages([
+                'session' => 'Compatibility session yang memiliki attendance, observation, atau presentation evidence tidak boleh di-hard-delete.',
+            ]);
+        }
+
         DB::table('class_session_student')
-            ->where('class_session_id', $occurrence->legacy_class_session_id)
+            ->where('class_session_id', $legacySessionId)
             ->delete();
         DB::table('class_sessions')
-            ->where('id', $occurrence->legacy_class_session_id)
+            ->where('id', $legacySessionId)
             ->delete();
     }
 
