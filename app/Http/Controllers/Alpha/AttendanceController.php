@@ -8,6 +8,7 @@ use App\Models\ClassSession;
 use App\Services\Alpha\AccessScopeService;
 use App\Services\Entitlement\AttendanceOutcomeService;
 use App\Services\Scheduling\SessionWriteService;
+use App\Support\Alpha\Role;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -89,10 +90,15 @@ class AttendanceController extends Controller
         ClassSession $classSession,
         SessionWriteService $sessionWrites,
     ): void {
-        $teacher = app(AccessScopeService::class)->teacherFor($request->user());
-        if (! $teacher) {
+        $user = $request->user();
+        abort_if(! $user, 403);
+
+        if ($user->role !== Role::TEACHER) {
             return;
         }
+
+        $teacher = app(AccessScopeService::class)->teacherFor($user);
+        abort_if(! $teacher, 403);
 
         $ownership = $sessionWrites->ownership($classSession);
         abort_if($ownership['teacher_id'] === null || $ownership['teacher_id'] !== (int) $teacher->id, 403);
