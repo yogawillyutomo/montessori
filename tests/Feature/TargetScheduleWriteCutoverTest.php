@@ -9,6 +9,7 @@ use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\User;
 use App\Models\WeeklySchedule;
+use App\Services\Migration\LegacyContractionReadinessService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -61,6 +62,7 @@ class TargetScheduleWriteCutoverTest extends TestCase
             'student_id' => $student->id,
         ]);
 
+        $this->assertReconciled();
         $this->artisan('legacy:reconcile')->assertExitCode(0);
     }
 
@@ -105,6 +107,7 @@ class TargetScheduleWriteCutoverTest extends TestCase
         $this->assertSame('Canonical Target Topic', $template->legacy_topic);
         $this->assertSame('Canonical Target Room', $legacy->room);
         $this->assertSame('Canonical Target Topic', $legacy->topic);
+        $this->assertReconciled();
         $this->artisan('legacy:reconcile')->assertExitCode(0);
     }
 
@@ -203,5 +206,16 @@ class TargetScheduleWriteCutoverTest extends TestCase
         $template->refresh();
         $this->assertFalse($template->is_active);
         $this->assertNotNull($template->legacy_deleted_at);
+    }
+
+    private function assertReconciled(): void
+    {
+        $readiness = app(LegacyContractionReadinessService::class);
+        $report = $readiness->report();
+
+        $this->assertTrue(
+            $readiness->dataReady(),
+            json_encode($report, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR),
+        );
     }
 }
