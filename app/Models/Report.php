@@ -15,13 +15,25 @@ class Report extends Model
 
     public const STATUSES = [
         'draft' => 'Draft',
+        'empty' => 'Belum Ada Data (Legacy)',
         'ready' => 'Siap Direview (Legacy)',
+        'reviewed' => 'Sudah Direview (Legacy)',
         'submitted_for_review' => 'Diajukan untuk Review',
         'under_review' => 'Sedang Direview',
         'revision_requested' => 'Perlu Revisi',
         'approved' => 'Disetujui',
         'published' => 'Dipublish',
         'archived' => 'Diarsipkan',
+    ];
+
+    private const LEGACY_STATUSES = [
+        'draft',
+        'empty',
+        'ready',
+        'reviewed',
+        'approved',
+        'published',
+        'archived',
     ];
 
     private const CYCLE_TRANSITIONS = [
@@ -105,19 +117,21 @@ class Report extends Model
     protected static function booted(): void
     {
         static::saving(function (Report $report): void {
-            if (! array_key_exists((string) $report->status, self::STATUSES)) {
-                throw ValidationException::withMessages([
-                    'status' => 'Status rapor tidak valid.',
-                ]);
-            }
-
             if (($report->report_cycle_id === null) !== ($report->child_enrollment_id === null)) {
                 throw ValidationException::withMessages([
                     'report_cycle_id' => 'Cycle report harus menyimpan report cycle dan child enrollment secara berpasangan.',
                 ]);
             }
 
+            $status = (string) $report->status;
+
             if ($report->report_cycle_id === null) {
+                if (! in_array($status, self::LEGACY_STATUSES, true)) {
+                    throw ValidationException::withMessages([
+                        'status' => 'Status rapor legacy tidak valid.',
+                    ]);
+                }
+
                 $duplicateLegacy = self::query()
                     ->where('student_id', $report->student_id)
                     ->where('term_id', $report->term_id)
@@ -132,6 +146,12 @@ class Report extends Model
                 }
 
                 return;
+            }
+
+            if (! array_key_exists($status, self::CYCLE_TRANSITIONS)) {
+                throw ValidationException::withMessages([
+                    'status' => 'Status cycle report tidak valid.',
+                ]);
             }
 
             $enrollment = ChildEnrollment::query()->find($report->child_enrollment_id);
@@ -267,10 +287,7 @@ class Report extends Model
 
     public function getStatusLabelAttribute(): string
     {
-        return self::STATUSES[$this->status] ?? [
-            'reviewed' => 'Sudah Direview',
-            'empty' => 'Belum Ada Data',
-        ][$this->status] ?? $this->status;
+        return self::STATUSES[$this->status] ?? $this->status;
     }
 
     public function getStatusBadgeClassAttribute(): string
