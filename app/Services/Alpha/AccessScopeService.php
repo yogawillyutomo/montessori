@@ -115,8 +115,14 @@ class AccessScopeService
             return true;
         }
 
-        if ($user->role === Role::PARENT && $report->status !== 'published') {
-            return false;
+        if ($user->role === Role::PARENT) {
+            if ($report->status === 'archived') {
+                return false;
+            }
+
+            if ($report->status !== 'published' && $report->published_version_id === null) {
+                return false;
+            }
         }
 
         return in_array((int) $report->student_id, $this->accessibleStudentIds($user), true);
@@ -160,11 +166,8 @@ class AccessScopeService
 
         return $query->where(function (Builder $teacherQuery) use ($teacherId, $today): void {
             $teacherQuery
-                // Legacy compatibility while schedule/session domains are migrated.
                 ->whereHas('weeklySchedules', fn (Builder $scheduleQuery) => $scheduleQuery->where('teacher_id', $teacherId))
                 ->orWhereHas('classSessions', fn (Builder $sessionQuery) => $sessionQuery->where('teacher_id', $teacherId))
-                // Intentional Montessori environment context. Only guide roles grant
-                // broad child scope; assistants/specialists require contextual access.
                 ->orWhereHas('environmentMemberships', function (Builder $membershipQuery) use ($teacherId, $today): void {
                     $membershipQuery
                         ->where('status', 'active')
@@ -187,7 +190,6 @@ class AccessScopeService
                                 });
                         });
                 })
-                // Explicit child-level responsibility such as primary guide/report owner.
                 ->orWhereHas('guideResponsibilities', function (Builder $responsibilityQuery) use ($teacherId, $today): void {
                     $responsibilityQuery
                         ->where('teacher_id', $teacherId)

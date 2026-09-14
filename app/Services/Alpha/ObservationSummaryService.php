@@ -3,6 +3,7 @@
 namespace App\Services\Alpha;
 
 use App\Models\Observation;
+use App\Models\ReportCycle;
 use App\Models\Student;
 use App\Models\Term;
 use Illuminate\Support\Collection;
@@ -14,6 +15,30 @@ class ObservationSummaryService
      */
     public function summarizeForStudent(Student $student, ?Term $term): array
     {
+        return $this->summarizeBetween(
+            $student,
+            $term?->starts_on?->toDateString(),
+            $term?->ends_on?->toDateString(),
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function summarizeForCycle(Student $student, ReportCycle $cycle): array
+    {
+        return $this->summarizeBetween(
+            $student,
+            $cycle->window_start->toDateString(),
+            $cycle->cutoff_date->toDateString(),
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function summarizeBetween(Student $student, ?string $startDate, ?string $endDate): array
+    {
         $observations = Observation::query()
             ->with(['developmentArea', 'indicator.developmentArea', 'teacher'])
             ->where('student_id', $student->id)
@@ -23,8 +48,8 @@ class ObservationSummaryService
                     ->where('include_in_report', true)
                     ->orWhere('status', 'included_in_report');
             })
-            ->when($term?->starts_on, fn ($query) => $query->whereDate('observed_on', '>=', $term->starts_on))
-            ->when($term?->ends_on, fn ($query) => $query->whereDate('observed_on', '<=', $term->ends_on))
+            ->when($startDate, fn ($query) => $query->whereDate('observed_on', '>=', $startDate))
+            ->when($endDate, fn ($query) => $query->whereDate('observed_on', '<=', $endDate))
             ->orderByDesc('observed_on')
             ->orderByDesc('id')
             ->get();

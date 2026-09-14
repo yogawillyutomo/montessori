@@ -23,6 +23,7 @@ class ReportStudentListService
             ->with(['guardian', 'schoolClass.classLevel'])
             ->with(['reports' => function ($reportQuery) use ($term): void {
                 $reportQuery
+                    ->whereNull('report_cycle_id')
                     ->when($term, fn ($query) => $query->where('term_id', $term->id))
                     ->latest('updated_at');
             }])
@@ -58,16 +59,20 @@ class ReportStudentListService
         if ($user->role === Role::PARENT) {
             $query->whereHas('reports', function (Builder $reportQuery) use ($term): void {
                 $reportQuery
+                    ->whereNull('report_cycle_id')
                     ->where('status', 'published')
                     ->when($term, fn ($query) => $query->where('term_id', $term->id));
             });
         } elseif ($status === 'not_created') {
             $query->whereDoesntHave('reports', function (Builder $reportQuery) use ($term): void {
-                $reportQuery->when($term, fn ($query) => $query->where('term_id', $term->id));
+                $reportQuery
+                    ->whereNull('report_cycle_id')
+                    ->when($term, fn ($query) => $query->where('term_id', $term->id));
             });
         } elseif ($status !== '') {
             $query->whereHas('reports', function (Builder $reportQuery) use ($term, $status): void {
                 $reportQuery
+                    ->whereNull('report_cycle_id')
                     ->where('status', $status)
                     ->when($term, fn ($query) => $query->where('term_id', $term->id));
             });

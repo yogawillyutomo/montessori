@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Alpha\AttendanceController;
 use App\Http\Controllers\Alpha\AuthController;
+use App\Http\Controllers\Alpha\CycleReportController;
 use App\Http\Controllers\Alpha\DashboardController;
 use App\Http\Controllers\Alpha\DevelopmentProgressController;
 use App\Http\Controllers\Alpha\FollowUpCandidateController;
@@ -110,6 +111,16 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/reports/students/{student}/draft', [ReportController::class, 'buildStudentDraft'])->name('alpha.reports.students.draft');
         Route::post('/reports/cycles/{reportCycle}/students/{student}/eligibility', [ReportEligibilityController::class, 'evaluate'])->name('alpha.report-eligibility.evaluate');
         Route::post('/report-eligibilities/{reportEligibility}/confirm', [ReportEligibilityController::class, 'confirm'])->name('alpha.report-eligibility.confirm');
+
+        Route::post('/reports/cycles/{reportCycle}/students/{student}/draft', [CycleReportController::class, 'draft'])->name('alpha.cycle-reports.draft');
+        Route::patch('/cycle-reports/{report}', [CycleReportController::class, 'update'])->name('alpha.cycle-reports.update');
+        Route::post('/cycle-reports/{report}/submit', [CycleReportController::class, 'submit'])->name('alpha.cycle-reports.submit');
+    });
+
+    Route::middleware('role:super_admin,principal')->group(function (): void {
+        Route::post('/cycle-reports/{report}/review', [CycleReportController::class, 'startReview'])->name('alpha.cycle-reports.review');
+        Route::post('/cycle-reports/{report}/request-revision', [CycleReportController::class, 'requestRevision'])->name('alpha.cycle-reports.request-revision');
+        Route::post('/cycle-reports/{report}/approve', [CycleReportController::class, 'approve'])->name('alpha.cycle-reports.approve');
     });
 
     Route::middleware('role:super_admin,admin,teacher,principal,parent')->group(function (): void {
@@ -126,6 +137,10 @@ Route::middleware('auth')->group(function (): void {
     Route::middleware('role:super_admin,admin')->group(function (): void {
         Route::post('/report-eligibilities/{reportEligibility}/override', [ReportEligibilityController::class, 'override'])->name('alpha.report-eligibility.override');
         Route::patch('/reports/{report}/publish', [ReportController::class, 'publish'])->name('alpha.reports.publish');
+
+        Route::post('/cycle-reports/{report}/publish', [CycleReportController::class, 'publish'])->name('alpha.cycle-reports.publish');
+        Route::post('/cycle-reports/{report}/begin-revision', [CycleReportController::class, 'beginRevision'])->name('alpha.cycle-reports.begin-revision');
+        Route::post('/cycle-reports/{report}/archive', [CycleReportController::class, 'archive'])->name('alpha.cycle-reports.archive');
     });
 
     Route::middleware('role:super_admin')->group(function (): void {

@@ -22,10 +22,9 @@ class ReportBuilderService
         $report = Report::query()
             ->where('student_id', $student->id)
             ->where('term_id', $term->id)
+            ->whereNull('report_cycle_id')
             ->first();
 
-        // Published output is immutable in the alpha hardening phase. A future report
-        // revision/version workflow may create a new draft without mutating this row.
         if ($report?->status === 'published') {
             return $report;
         }
@@ -37,8 +36,10 @@ class ReportBuilderService
             [
                 'student_id' => $student->id,
                 'term_id' => $term->id,
+                'report_cycle_id' => null,
             ],
             [
+                'child_enrollment_id' => null,
                 'homeroom_teacher_id' => $teacher?->id,
                 'status' => 'draft',
                 'summary' => $summary,
@@ -63,8 +64,10 @@ class ReportBuilderService
             [
                 'student_id' => $student->id,
                 'term_id' => $term->id,
+                'report_cycle_id' => null,
             ],
             [
+                'child_enrollment_id' => null,
                 'homeroom_teacher_id' => $this->homeroomTeacherFor($student, $user)?->id,
                 'status' => 'draft',
                 'summary' => $this->summaryFor($student, $term),
@@ -154,6 +157,12 @@ class ReportBuilderService
 
     public function publish(Report $report, User $user): Report
     {
+        if ($report->isCycleReport()) {
+            throw ValidationException::withMessages([
+                'status' => 'Cycle report hanya boleh dipublish melalui M14 report workflow agar approval dan immutable version tercatat.',
+            ]);
+        }
+
         if ($report->status === 'published') {
             return $report;
         }
