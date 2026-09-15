@@ -54,6 +54,12 @@ Run the tranche-specific tests first so failures are easier to diagnose:
 php artisan test tests/Feature/TargetSessionWriteCutoverTest.php
 php artisan test tests/Feature/SessionCompatibilitySelfHealingTest.php
 php artisan test tests/Feature/SessionAuthorizationFailClosedTest.php
+php artisan test tests/Feature/SessionDeleteEvidenceGuardTest.php
+php artisan test tests/Feature/SessionTerminalBookingGuardTest.php
+php artisan test tests/Feature/BookingPresentationEvidenceGuardTest.php
+php artisan test tests/Feature/MakeupPresentationEvidenceGuardTest.php
+php artisan test tests/Feature/LegacySessionRollbackDeleteGuardTest.php
+php artisan test tests/Feature/DatabaseSeederTargetReconciliationTest.php
 php artisan test tests/Feature/SessionTemplateOccurrenceTest.php
 php artisan test tests/Feature/TargetScheduleWriteCutoverTest.php
 php artisan test tests/Feature/TargetSchedulingReadCutoverTest.php
@@ -74,10 +80,15 @@ Required semantics covered by this gate include:
 - explicit `unmarked` attendance remains `unmarked` when a session closes;
 - school cancellation preserves historical membership and existing makeup/credit policy;
 - reschedule preserves source history and booking movement lineage;
-- terminal bookings are not resurrected by compatibility sync;
+- terminal bookings cannot be resurrected through generic roster updates or compatibility sync;
 - missing compatibility mirrors can self-heal from canonical target state;
 - orphan teacher accounts fail closed rather than gaining session mutation access;
-- explicit legacy rollback mode still bridges changes to the target domain.
+- marked attendance, observation, presentation, credit, and movement history block destructive session/booking mutations where applicable;
+- presentation evidence is historical pedagogical evidence, not attendance fulfillment or automatic progress/mastery;
+- makeup refuses a contradictory source booking that has presentation evidence;
+- explicit legacy rollback mode still bridges changes to the target domain without weakening lifecycle/history safety;
+- the normal test harness uses the target-authoritative default rather than globally masking seed execution as legacy;
+- `DatabaseSeeder` produces canonical session/booking lineage and reconciliation-ready marked attendance while restoring the configured write source after its scoped historical fixture bridge.
 
 ## 4. Full PHP regression gate
 
@@ -89,28 +100,35 @@ php artisan test
 
 Do not merge based only on the targeted tests.
 
-## 5. Legacy reconciliation gate
+## 5. Fresh-seed + legacy reconciliation gate
 
-Run:
+The historical demo fixture block intentionally seeds legacy-shaped `ClassSession` rows inside a **scoped** `MONTESSORI_SESSION_WRITE_SOURCE=legacy` bridge context. It then restores the previous configuration and links seeded marked attendance to canonical `ChildSessionBooking` rows. Runtime/default authority remains `target`.
+
+Verify this from a disposable local database. Do not run destructive migration commands against production data.
+
+For the normal SQLite/dev validation environment:
 
 ```powershell
+php artisan migrate:fresh --seed
 php artisan legacy:reconcile
 ```
 
-The command must exit successfully and report the baseline as ready/reconciled. Do **not** change the readiness gate merely to ignore a mismatch.
+Requirements:
+
+- seed completes without manual database repair;
+- runtime config returns to target-authoritative defaults after seeding;
+- seeded marked attendance has canonical booking lineage;
+- `legacy:reconcile` exits successfully and reports the baseline as ready/reconciled.
+
+The automated regression `DatabaseSeederTargetReconciliationTest.php` must also pass in the targeted and full PHP gates.
 
 If reconciliation fails:
 
 1. identify the exact failed check;
 2. inspect missing / duplicate / mismatch identities;
 3. fix source or compatibility lineage;
-4. only change the reconciliation definition if the canonical domain definition has genuinely changed.
-
-### Fresh-seed caveat
-
-The current M17.3B source audit identified a developer-fixture risk: `DatabaseSeeder` still creates historical `ClassSession` fixtures through legacy models, while legacy session model events are intentionally disabled when `MONTESSORI_SESSION_WRITE_SOURCE=target`.
-
-Until that fixture path is explicitly corrected, **do not manually repair the database and call the gate green**. A fresh-seed reconciliation failure is evidence that the fixture path still needs a source fix.
+4. do not manually massage the database and call the gate green;
+5. only change the reconciliation definition if the canonical domain definition has genuinely changed.
 
 ## 6. Pint gate
 
@@ -145,7 +163,7 @@ The dedicated operational session rollback switch must remain real:
 MONTESSORI_SESSION_WRITE_SOURCE=legacy
 ```
 
-The regression suite already contains create → update → close rollback coverage. When manually smoke-testing the UI, verify that rollback mode is temporary and restore:
+Regression coverage includes rollback create → update → close plus lifecycle/history delete guards. When manually smoke-testing the UI, verify rollback mode is temporary and restore:
 
 ```env
 MONTESSORI_SESSION_WRITE_SOURCE=target
@@ -170,9 +188,11 @@ With target mode active, verify at least:
 5. reschedule one eligible booking and verify source history remains visible;
 6. cancel an eligible child booking;
 7. exercise school/session cancellation on a disposable fixture and verify history is retained;
-8. verify a teacher cannot mutate another teacher's session;
-9. verify an orphan teacher user without a Teacher profile receives 403;
-10. re-run `php artisan legacy:reconcile` after the target-authoritative mutations.
+8. verify a terminal booking cannot be silently re-added through a generic roster update;
+9. verify destructive mutation is refused when attendance/pedagogical evidence exists;
+10. verify a teacher cannot mutate another teacher's session;
+11. verify an orphan teacher user without a Teacher profile receives 403;
+12. re-run `php artisan legacy:reconcile` after the target-authoritative mutations.
 
 Do not perform destructive smoke tests against production data.
 
@@ -184,6 +204,7 @@ Before requesting merge, record:
 - exact base/main SHA;
 - targeted regression result;
 - full `php artisan test` result;
+- fresh `migrate:fresh --seed` result on a disposable local database;
 - `legacy:reconcile` result;
 - Pint result;
 - `npm ci` result;
