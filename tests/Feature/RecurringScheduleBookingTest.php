@@ -180,19 +180,23 @@ class RecurringScheduleBookingTest extends TestCase
             $query->whereDate('session_date', '2026-12-22');
         })->firstOrFail();
 
-        $session = ClassSession::query()->create([
-            'weekly_schedule_id' => null,
-            'school_class_id' => $source->school_class_id,
-            'teacher_id' => $source->teacher_id,
-            'room' => 'Booking Test Room',
-            'capacity' => 8,
-            'session_date' => '2026-12-22',
-            'starts_at' => '08:00',
-            'ends_at' => '09:00',
-            'topic' => 'Booking before attendance',
-            'status' => 'planned',
-        ]);
-        $session->students()->attach($student->id);
+        $session = $this->withLegacySessionWriteSource(function () use ($source, $student): ClassSession {
+            $session = ClassSession::query()->create([
+                'weekly_schedule_id' => null,
+                'school_class_id' => $source->school_class_id,
+                'teacher_id' => $source->teacher_id,
+                'room' => 'Booking Test Room',
+                'capacity' => 8,
+                'session_date' => '2026-12-22',
+                'starts_at' => '08:00',
+                'ends_at' => '09:00',
+                'topic' => 'Booking before attendance',
+                'status' => 'planned',
+            ]);
+            $session->students()->attach($student->id);
+
+            return $session;
+        });
 
         $booking = ChildSessionBooking::query()
             ->where('legacy_class_session_id', $session->id)
@@ -212,7 +216,9 @@ class RecurringScheduleBookingTest extends TestCase
         $student = $session->students->firstOrFail();
         $pivotId = (int) $student->pivot->id;
 
-        $session->update(['status' => 'cancelled']);
+        $this->withLegacySessionWriteSource(function () use ($session): void {
+            $session->update(['status' => 'cancelled']);
+        });
 
         $booking = ChildSessionBooking::query()
             ->where('legacy_class_session_student_id', $pivotId)
@@ -220,12 +226,26 @@ class RecurringScheduleBookingTest extends TestCase
         $this->assertSame('session_cancelled', $booking->status);
         $this->assertNull($booking->active_on);
 
-        $session->students()->detach($student->id);
+        $this->withLegacySessionWriteSource(function () use ($session, $student): void {
+            $session->students()->detach($student->id);
+        });
 
         $booking->refresh();
         $this->assertSame('cancelled', $booking->status);
         $this->assertNull($booking->active_on);
         $this->assertNotNull($booking->legacy_deleted_at);
+    }
+
+    private function withLegacySessionWriteSource(callable $callback): mixed
+    {
+        $previousSource = config('montessori.session.write_source', 'target');
+        config()->set('montessori.session.write_source', 'legacy');
+
+        try {
+            return $callback();
+        } finally {
+            config()->set('montessori.session.write_source', $previousSource);
+        }
     }
 
     private function occurrence(string $date, string $startsAt, string $endsAt, int $capacity): SessionOccurrence
