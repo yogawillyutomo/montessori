@@ -178,7 +178,7 @@ class LegacySessionCompatibilityWriter
         }
 
         if (! $attendance) {
-            $attendance = new Attendance();
+            $attendance = new Attendance;
         }
 
         if ($attendance->exists && $attendance->child_session_booking_id !== null

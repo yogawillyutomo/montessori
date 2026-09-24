@@ -4,8 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\ChildEnrollment;
 use App\Models\ChildSessionBooking;
-use App\Models\ClassSession;
 use App\Models\ClassLevel;
+use App\Models\ClassSession;
 use App\Models\MakeupEligibility;
 use App\Models\SessionCredit;
 use App\Models\SessionOccurrence;

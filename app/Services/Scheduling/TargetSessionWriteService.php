@@ -278,6 +278,7 @@ class TargetSessionWriteService
                     'cancelled_at' => now(),
                 ])->save();
                 $this->compatibility->syncBooking($booking);
+
                 continue;
             }
 
