@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\ChildEnrollment;
 use App\Models\ChildSessionBooking;
 use App\Models\ClassLevel;
+use App\Models\ClassSession;
 use App\Models\EnrollmentPlanAssignment;
 use App\Models\EntitlementPeriod;
 use App\Models\RecurringSchedule;
@@ -15,6 +16,7 @@ use App\Models\User;
 use App\Services\Enrollment\ChildEnrollmentService;
 use App\Services\Enrollment\EnrollmentPlanService;
 use App\Services\Scheduling\BookingRescheduleService;
+use App\Services\Scheduling\LegacySessionCompatibilityWriter;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
@@ -297,7 +299,7 @@ class EnrollmentSessionPlanTest extends TestCase
         $level = $this->level('movement-m6', 'Movement M6');
         $enrollment = app(ChildEnrollmentService::class)->enroll($student, $level, '2026-09-01', $admin);
         $sourceOccurrence = $this->occurrence('2026-09-10');
-        $destinationOccurrence = $this->occurrence('2026-09-11');
+        $destinationOccurrence = $this->compatibilityOccurrence('2026-09-11');
         $source = $this->booking($student, $enrollment, $sourceOccurrence);
 
         $movement = app(BookingRescheduleService::class)->reschedule(
@@ -355,6 +357,27 @@ class EnrollmentSessionPlanTest extends TestCase
             'room' => 'M6 Room '.$date,
             'status' => 'planned',
         ]);
+    }
+
+    private function compatibilityOccurrence(string $date): SessionOccurrence
+    {
+        $base = ClassSession::query()->firstOrFail();
+        $occurrence = SessionOccurrence::query()->create([
+            'session_template_id' => null,
+            'environment_id' => null,
+            'occurs_on' => $date,
+            'starts_at' => '10:00',
+            'ends_at' => '11:00',
+            'capacity' => 8,
+            'room' => 'M6 Room '.$date,
+            'status' => 'planned',
+            'legacy_school_class_id' => $base->school_class_id,
+            'legacy_teacher_id' => $base->teacher_id,
+        ]);
+
+        app(LegacySessionCompatibilityWriter::class)->syncOccurrence($occurrence);
+
+        return $occurrence->fresh();
     }
 
     private function booking(

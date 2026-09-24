@@ -50,7 +50,7 @@ class ImportTemplateService
         }
 
         $path = tempnam($directory, 'template_');
-        $zip = new \ZipArchive();
+        $zip = new \ZipArchive;
         $opened = $zip->open($path, \ZipArchive::OVERWRITE);
         abort_unless($opened === true, 500, 'Template Excel tidak bisa dibuat.');
 

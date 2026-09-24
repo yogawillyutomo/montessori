@@ -97,7 +97,7 @@ class SpreadsheetReader
      */
     private function xlsxRows(string $path): array
     {
-        $zip = new \ZipArchive();
+        $zip = new \ZipArchive;
         if ($zip->open($path) !== true) {
             throw ValidationException::withMessages(['file' => 'File Excel tidak bisa dibuka.']);
         }

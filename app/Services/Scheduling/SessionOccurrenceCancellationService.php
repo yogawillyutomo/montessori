@@ -4,7 +4,6 @@ namespace App\Services\Scheduling;
 
 use App\Models\Attendance;
 use App\Models\ChildSessionBooking;
-use App\Models\ClassSession;
 use App\Models\Observation;
 use App\Models\SessionOccurrence;
 use App\Models\User;
@@ -17,6 +16,7 @@ class SessionOccurrenceCancellationService
     public function __construct(
         private readonly BookingEvidenceService $evidence,
         private readonly MakeupEligibilityService $eligibilities,
+        private readonly LegacySessionCompatibilityWriter $compatibility,
     ) {}
 
     public function cancel(
@@ -50,34 +50,21 @@ class SessionOccurrenceCancellationService
 
             $this->assertNoRecordedSessionEvidence($locked);
 
-            $creditedBookingIds = ChildSessionBooking::query()
+            $activeBookings = ChildSessionBooking::query()
                 ->where('session_occurrence_id', $locked->id)
                 ->whereIn('status', ChildSessionBooking::ACTIVE_STATUSES)
+                ->lockForUpdate()
+                ->get();
+            $creditedBookingIds = $activeBookings
                 ->whereNotNull('session_credit_id')
                 ->pluck('id');
 
-            if ($locked->legacy_class_session_id) {
-                $legacySession = ClassSession::query()->find($locked->legacy_class_session_id);
-
-                if (! $legacySession) {
-                    throw ValidationException::withMessages([
-                        'occurrence_id' => 'Legacy session untuk occurrence tidak ditemukan.',
-                    ]);
-                }
-
-                $legacySession->update(['status' => 'cancelled']);
-                $locked = SessionOccurrence::query()
-                    ->whereKey($locked->id)
-                    ->lockForUpdate()
-                    ->firstOrFail();
-            } else {
-                ChildSessionBooking::query()
-                    ->where('session_occurrence_id', $locked->id)
-                    ->whereIn('status', ChildSessionBooking::ACTIVE_STATUSES)
-                    ->update([
-                        'status' => 'session_cancelled',
-                        'active_on' => null,
-                    ]);
+            foreach ($activeBookings as $booking) {
+                $booking->forceFill([
+                    'status' => 'session_cancelled',
+                    'active_on' => null,
+                ])->save();
+                $this->compatibility->syncBooking($booking);
             }
 
             $locked->forceFill([
@@ -86,6 +73,7 @@ class SessionOccurrenceCancellationService
                 'cancelled_by' => $actor->id,
                 'cancelled_at' => now(),
             ])->save();
+            $this->compatibility->syncOccurrence($locked);
 
             foreach ($creditedBookingIds as $bookingId) {
                 $booking = ChildSessionBooking::query()->findOrFail($bookingId);
@@ -123,9 +111,9 @@ class SessionOccurrenceCancellationService
             ->where('class_session_id', $occurrence->legacy_class_session_id)
             ->exists();
 
-        if ($hasMarkedAttendance || $hasObservation) {
+        if ($hasMarkedAttendance || $hasObservation || $occurrence->presentations()->exists()) {
             throw ValidationException::withMessages([
-                'occurrence_id' => 'Session yang sudah memiliki presensi atau observasi tidak boleh dibatalkan.',
+                'occurrence_id' => 'Session yang sudah memiliki presensi, observasi, atau presentation evidence tidak boleh dibatalkan.',
             ]);
         }
     }

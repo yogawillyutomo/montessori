@@ -2,10 +2,8 @@
 
 namespace App\Services\Scheduling;
 
-use App\Models\Attendance;
 use App\Models\BookingMovement;
 use App\Models\ChildSessionBooking;
-use App\Models\ClassSession;
 use App\Models\MakeupEligibility;
 use App\Models\SessionOccurrence;
 use App\Models\User;
@@ -18,6 +16,7 @@ class MakeupBookingService
     public function __construct(
         private readonly BookingLineageService $lineage,
         private readonly BookingEvidenceService $evidence,
+        private readonly LegacySessionCompatibilityWriter $compatibility,
     ) {}
 
     public function schedule(
@@ -99,6 +98,12 @@ class MakeupBookingService
                 ]);
             }
 
+            if ($this->evidence->hasPresentationEvidence($source)) {
+                throw ValidationException::withMessages([
+                    'source_booking_id' => 'Booking dengan presentation evidence tidak boleh dipindahkan melalui makeup. Rekonsiliasi attendance/evidence terlebih dahulu.',
+                ]);
+            }
+
             $schoolCancellationSource = $source->status === 'session_cancelled';
 
             if (! $schoolCancellationSource) {
@@ -161,6 +166,7 @@ class MakeupBookingService
                     'status' => 'rescheduled_out',
                     'active_on' => null,
                 ])->save();
+                $this->compatibility->syncBooking($source);
             }
 
             $destinationBooking = ChildSessionBooking::query()->create([
@@ -179,7 +185,8 @@ class MakeupBookingService
                 'capacity_override_reason' => $capacityOverride ? $capacityOverrideReason : null,
             ]);
 
-            $this->syncLegacyDestination($destinationBooking, $destination);
+            $this->compatibility->syncBooking($destinationBooking);
+            $this->compatibility->ensureUnmarkedAttendance($destinationBooking);
 
             return BookingMovement::query()->create([
                 'source_booking_id' => $source->id,
@@ -191,49 +198,6 @@ class MakeupBookingService
                 'capacity_override_reason' => $capacityOverride ? $capacityOverrideReason : null,
             ])->load(['sourceBooking', 'destinationBooking', 'movedBy']);
         });
-    }
-
-    private function syncLegacyDestination(
-        ChildSessionBooking $destinationBooking,
-        SessionOccurrence $destinationOccurrence,
-    ): void {
-        if (! $destinationOccurrence->legacy_class_session_id) {
-            return;
-        }
-
-        $legacySession = ClassSession::query()->find($destinationOccurrence->legacy_class_session_id);
-        if (! $legacySession) {
-            throw ValidationException::withMessages([
-                'destination_occurrence_id' => 'Legacy session untuk occurrence tujuan tidak ditemukan.',
-            ]);
-        }
-
-        if (! $legacySession->students()->whereKey($destinationBooking->student_id)->exists()) {
-            $legacySession->students()->attach($destinationBooking->student_id);
-        }
-
-        $destinationBooking->refresh();
-        $attendance = Attendance::query()->firstOrCreate(
-            [
-                'class_session_id' => $legacySession->id,
-                'student_id' => $destinationBooking->student_id,
-            ],
-            [
-                'child_session_booking_id' => $destinationBooking->id,
-                'status' => 'unmarked',
-                'note' => null,
-                'marked_by' => null,
-                'marked_at' => null,
-            ]
-        );
-
-        if ($attendance->child_session_booking_id === null) {
-            $attendance->forceFill(['child_session_booking_id' => $destinationBooking->id])->save();
-        } elseif ((int) $attendance->child_session_booking_id !== (int) $destinationBooking->id) {
-            throw ValidationException::withMessages([
-                'attendance' => 'Attendance destination sudah terhubung ke booking lain.',
-            ]);
-        }
     }
 
     private function authorize(User $actor): void

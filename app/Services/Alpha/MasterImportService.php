@@ -14,9 +14,7 @@ use Illuminate\Validation\ValidationException;
 
 class MasterImportService
 {
-    public function __construct(private readonly SpreadsheetReader $reader)
-    {
-    }
+    public function __construct(private readonly SpreadsheetReader $reader) {}
 
     /**
      * @return array{created: int, updated: int}
@@ -40,12 +38,14 @@ class MasterImportService
 
             if (! $code || ! $name || ! $className) {
                 $errors[] = "Baris {$line}: kode, nama, dan kelas wajib diisi.";
+
                 continue;
             }
 
             $class = $classes->get($this->reader->lookupKey($className));
             if (! $class) {
                 $errors[] = "Baris {$line}: kelas {$className} tidak ditemukan.";
+
                 continue;
             }
 
@@ -102,6 +102,7 @@ class MasterImportService
 
             if (! $code || ! $name) {
                 $errors[] = "Baris {$line}: kode dan nama wajib diisi.";
+
                 continue;
             }
 
@@ -144,6 +145,7 @@ class MasterImportService
 
             if (! $areaName || ! $code || ! $subArea || ! $description) {
                 $errors[] = "Baris {$line}: area, kode, sub_area, dan indikator wajib diisi.";
+
                 continue;
             }
 

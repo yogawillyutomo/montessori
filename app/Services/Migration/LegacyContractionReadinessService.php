@@ -159,7 +159,7 @@ class LegacyContractionReadinessService
                     ->orWhereColumn('target.legacy_school_class_id', '!=', 'legacy.school_class_id')
                     ->orWhereNull('target.legacy_teacher_id')
                     ->orWhereColumn('target.legacy_teacher_id', '!=', 'legacy.teacher_id')
-                    ->orWhereColumn('target.occurs_on', '!=', 'legacy.session_date')
+                    ->orWhereRaw('DATE(target.occurs_on) != DATE(legacy.session_date)')
                     ->orWhere(function ($schedule): void {
                         $schedule->whereNotNull('legacy.weekly_schedule_id')
                             ->where(function ($binding): void {

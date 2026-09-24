@@ -37,10 +37,18 @@ class ClassSessionStudent extends Pivot
         });
 
         static::saved(function (ClassSessionStudent $pivot): void {
+            if (config('montessori.session.write_source', 'target') !== 'legacy') {
+                return;
+            }
+
             app(LegacyBookingBridgeService::class)->syncBookingPivot($pivot);
         });
 
         static::deleted(function (ClassSessionStudent $pivot): void {
+            if (config('montessori.session.write_source', 'target') !== 'legacy') {
+                return;
+            }
+
             app(LegacyBookingBridgeService::class)->markBookingPivotDeleted($pivot);
         });
     }
