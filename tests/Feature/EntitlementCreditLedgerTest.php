@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\ChildEnrollment;
 use App\Models\ChildSessionBooking;
+use App\Models\ClassSession;
 use App\Models\ClassLevel;
 use App\Models\EntitlementAdjustment;
 use App\Models\EntitlementPeriod;
@@ -18,6 +19,7 @@ use App\Services\Entitlement\CreditAllocationService;
 use App\Services\Entitlement\EntitlementAdjustmentService;
 use App\Services\Entitlement\EntitlementPeriodService;
 use App\Services\Scheduling\BookingRescheduleService;
+use App\Services\Scheduling\LegacySessionCompatibilityWriter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
 use LogicException;
@@ -302,7 +304,7 @@ class EntitlementCreditLedgerTest extends TestCase
         $credit = $period->credits()->firstOrFail();
         $source = $this->booking($student, $enrollment, $this->occurrence('2026-09-28'));
         app(CreditAllocationService::class)->allocate($source, $credit, $admin);
-        $destinationOccurrence = $this->occurrence('2026-10-02');
+        $destinationOccurrence = $this->compatibilityOccurrence('2026-10-02');
 
         $movement = app(BookingRescheduleService::class)->reschedule(
             $source,
@@ -408,6 +410,27 @@ class EntitlementCreditLedgerTest extends TestCase
             'room' => 'M7 Room '.$date,
             'status' => 'planned',
         ]);
+    }
+
+    private function compatibilityOccurrence(string $date): SessionOccurrence
+    {
+        $base = ClassSession::query()->firstOrFail();
+        $occurrence = SessionOccurrence::query()->create([
+            'session_template_id' => null,
+            'environment_id' => null,
+            'occurs_on' => $date,
+            'starts_at' => '10:00',
+            'ends_at' => '11:00',
+            'capacity' => 12,
+            'room' => 'M7 Room '.$date,
+            'status' => 'planned',
+            'legacy_school_class_id' => $base->school_class_id,
+            'legacy_teacher_id' => $base->teacher_id,
+        ]);
+
+        app(LegacySessionCompatibilityWriter::class)->syncOccurrence($occurrence);
+
+        return $occurrence->fresh();
     }
 
     private function booking(
