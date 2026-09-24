@@ -179,7 +179,7 @@ class AttendanceCreditMakeupTest extends TestCase
         );
 
         $this->assertSame($destination->id, $destinationAttendance->child_session_booking_id);
-        $this->assertNull($destinationAttendance->class_session_id);
+        $this->assertSame($destination->legacy_class_session_id, $destinationAttendance->class_session_id);
         $this->assertSame('used', $credit->fresh()->status);
         $this->assertSame('fulfilled', $eligibility->fresh()->status);
         $this->assertSame($destination->id, $eligibility->fresh()->fulfilled_by_booking_id);
