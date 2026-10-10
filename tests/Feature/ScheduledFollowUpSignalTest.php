@@ -3,10 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\ChildGuideResponsibility;
+use App\Models\ChildSessionBooking;
 use App\Models\ClassSession;
 use App\Models\DevelopmentArea;
 use App\Models\Indicator;
 use App\Models\SchoolClass;
+use App\Models\SessionOccurrence;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\User;
@@ -129,6 +131,26 @@ class ScheduledFollowUpSignalTest extends TestCase
             'status' => 'planned',
         ]);
         $session->students()->attach($student->id);
+
+        $occurrence = SessionOccurrence::query()->create([
+            'occurs_on' => now()->toDateString(),
+            'starts_at' => '08:00',
+            'ends_at' => '09:00',
+            'capacity' => 12,
+            'status' => 'planned',
+            'legacy_class_session_id' => $session->id,
+            'legacy_school_class_id' => $schoolClass->id,
+            'legacy_teacher_id' => $teacher->id,
+        ]);
+
+        ChildSessionBooking::query()->create([
+            'student_id' => $student->id,
+            'session_occurrence_id' => $occurrence->id,
+            'booking_type' => 'regular',
+            'status' => 'scheduled',
+            'source_type' => 'test_fixture',
+            'created_by' => $user->id,
+        ]);
 
         return [$user, $teacher, $student, $indicator, $session];
     }
