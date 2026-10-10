@@ -17,6 +17,14 @@ class ScheduleWriteService
      */
     public function createTarget(array $payload): SessionTemplate
     {
+        if ($this->usesLegacySource()) {
+            $legacy = $this->createLegacy($payload);
+
+            return SessionTemplate::query()
+                ->where('legacy_weekly_schedule_id', $legacy->id)
+                ->firstOrFail();
+        }
+
         return DB::transaction(function () use ($payload): SessionTemplate {
             $studentIds = $this->studentIds($payload);
             $this->assertValid($payload, $studentIds);
@@ -33,6 +41,14 @@ class ScheduleWriteService
      */
     public function updateTarget(SessionTemplate $template, array $payload): SessionTemplate
     {
+        if ($this->usesLegacySource()) {
+            $legacy = $this->updateLegacy($this->legacyScheduleFor($template), $payload);
+
+            return SessionTemplate::query()
+                ->where('legacy_weekly_schedule_id', $legacy->id)
+                ->firstOrFail();
+        }
+
         return DB::transaction(function () use ($template, $payload): SessionTemplate {
             $template = SessionTemplate::query()->lockForUpdate()->findOrFail($template->id);
             $studentIds = $this->studentIds($payload);
@@ -47,6 +63,15 @@ class ScheduleWriteService
 
     public function toggleTarget(SessionTemplate $template): SessionTemplate
     {
+        if ($this->usesLegacySource()) {
+            $legacy = $this->legacyScheduleFor($template);
+            $legacy->update(['is_active' => ! $legacy->is_active]);
+
+            return SessionTemplate::query()
+                ->where('legacy_weekly_schedule_id', $legacy->id)
+                ->firstOrFail();
+        }
+
         return DB::transaction(function () use ($template): SessionTemplate {
             $template = SessionTemplate::query()->lockForUpdate()->findOrFail($template->id);
             $nextActive = ! $template->is_active;
@@ -82,6 +107,12 @@ class ScheduleWriteService
 
     public function deleteTarget(SessionTemplate $template): void
     {
+        if ($this->usesLegacySource()) {
+            $this->legacyScheduleFor($template)->delete();
+
+            return;
+        }
+
         DB::transaction(function () use ($template): void {
             $template = SessionTemplate::query()->lockForUpdate()->findOrFail($template->id);
 
@@ -579,6 +610,17 @@ class ScheduleWriteService
         $room = trim((string) $room);
 
         return $room === '' ? null : $room;
+    }
+
+    private function legacyScheduleFor(SessionTemplate $template): WeeklySchedule
+    {
+        if ($template->legacy_weekly_schedule_id === null) {
+            throw ValidationException::withMessages([
+                'schedule' => 'Legacy rollback membutuhkan compatibility WeeklySchedule yang masih tersedia.',
+            ]);
+        }
+
+        return WeeklySchedule::query()->findOrFail($template->legacy_weekly_schedule_id);
     }
 
     private function usesLegacySource(): bool
