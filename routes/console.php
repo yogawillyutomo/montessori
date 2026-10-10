@@ -51,7 +51,6 @@ Artisan::command('legacy:reconcile', function (LegacyContractionReadinessService
     return 0;
 })->purpose('Reconcile legacy scheduling data against target-domain mappings before contraction');
 
-
 Artisan::command('legacy:contraction-audit', function (LegacyContractionAuditService $audit): int {
     $report = $audit->report();
 
