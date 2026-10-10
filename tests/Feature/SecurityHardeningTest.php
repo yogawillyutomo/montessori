@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\ClassSession;
+use App\Models\SessionOccurrence;
 use App\Models\Report;
 use App\Models\Student;
 use App\Models\Teacher;
@@ -21,7 +21,7 @@ class SecurityHardeningTest extends TestCase
 
         $teacherUser = $this->user('raras@montessori.test');
         $teacher = Teacher::query()->where('user_id', $teacherUser->id)->firstOrFail();
-        $session = ClassSession::query()->where('teacher_id', $teacher->id)->with('students')->firstOrFail();
+        $session = SessionOccurrence::query()->where('legacy_teacher_id', $teacher->id)->with('students')->firstOrFail();
 
         $allowedStudentIds = app(AccessScopeService::class)->accessibleStudentIds($teacherUser);
         $outsideStudent = Student::query()->whereNotIn('id', $allowedStudentIds)->firstOrFail();
@@ -47,7 +47,7 @@ class SecurityHardeningTest extends TestCase
         $teacherUser = $this->user('raras@montessori.test');
         $teacher = Teacher::query()->where('user_id', $teacherUser->id)->firstOrFail();
         $otherTeacher = Teacher::query()->whereKeyNot($teacher->id)->firstOrFail();
-        $session = ClassSession::query()->where('teacher_id', $teacher->id)->with('students')->firstOrFail();
+        $session = SessionOccurrence::query()->where('legacy_teacher_id', $teacher->id)->with('students')->firstOrFail();
 
         $this->actingAs($teacherUser)
             ->patch(route('alpha.process.sessions.update', $session), $this->sessionPayload($session, [
@@ -64,9 +64,9 @@ class SecurityHardeningTest extends TestCase
 
         $teacherUser = $this->user('raras@montessori.test');
         $teacher = Teacher::query()->where('user_id', $teacherUser->id)->firstOrFail();
-        $session = ClassSession::query()->where('teacher_id', $teacher->id)->with('students')->firstOrFail();
+        $session = SessionOccurrence::query()->where('legacy_teacher_id', $teacher->id)->with('students')->firstOrFail();
         $otherClassId = Student::query()
-            ->where('school_class_id', '!=', $session->school_class_id)
+            ->where('school_class_id', '!=', $session->legacy_school_class_id)
             ->value('school_class_id');
 
         $this->assertNotNull($otherClassId);
@@ -202,19 +202,19 @@ class SecurityHardeningTest extends TestCase
      * @param  array<string, mixed>  $overrides
      * @return array<string, mixed>
      */
-    private function sessionPayload(ClassSession $session, array $overrides = []): array
+    private function sessionPayload(SessionOccurrence $session, array $overrides = []): array
     {
         $session->loadMissing('students');
 
         return array_replace([
             'school_class_id' => $session->school_class_id,
-            'teacher_id' => $session->teacher_id,
+            'teacher_id' => $session->legacy_teacher_id,
             'room' => $session->room,
             'capacity' => max(1, (int) ($session->capacity ?: $session->students->count())),
-            'session_date' => $session->session_date->toDateString(),
+            'session_date' => $session->occurs_on->toDateString(),
             'starts_at' => $session->starts_at->format('H:i'),
             'ends_at' => $session->ends_at->format('H:i'),
-            'topic' => $session->topic,
+            'topic' => $session->legacy_topic,
             'status' => $session->status,
             'student_ids_present' => true,
             'student_ids' => $session->students->pluck('id')->map(fn ($id): int => (int) $id)->all(),
