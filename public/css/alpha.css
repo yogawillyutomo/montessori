@@ -1161,6 +1161,96 @@ textarea:focus {
     margin-top: 16px;
 }
 
+.confirm-action-modal {
+    width: min(520px, calc(100vw - 28px));
+    border-radius: 28px;
+}
+
+.confirm-action-modal .modal-body {
+    padding: 24px;
+}
+
+.confirm-action-body {
+    display: grid;
+    gap: 18px;
+}
+
+.confirm-action-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.confirm-action-icon {
+    width: 46px;
+    height: 46px;
+    display: grid;
+    place-items: center;
+    border-radius: 16px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    color: var(--blue);
+}
+
+.confirm-action-icon svg {
+    width: 22px;
+    height: 22px;
+}
+
+.confirm-action-close {
+    flex: 0 0 auto;
+}
+
+.confirm-action-copy {
+    display: grid;
+    gap: 7px;
+}
+
+.confirm-action-kicker {
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.confirm-action-copy h3 {
+    margin: 0;
+    font-size: clamp(22px, 3vw, 28px);
+    line-height: 1.1;
+}
+
+.confirm-action-copy p {
+    margin: 0;
+    line-height: 1.6;
+}
+
+.confirm-action-actions {
+    margin-top: 2px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+}
+
+.confirm-action-actions .btn {
+    min-width: 112px;
+}
+
+@media (max-width: 520px) {
+    .confirm-action-modal .modal-body {
+        padding: 20px;
+    }
+
+    .confirm-action-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .confirm-action-actions .btn {
+        width: 100%;
+        min-width: 0;
+    }
+}
+
 .modal-error {
     margin-bottom: 16px;
     box-shadow: none;
