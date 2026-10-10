@@ -140,7 +140,6 @@ class SchedulingReadModelService
             $legacy->setRelation('schoolClass', $schoolClass);
             $legacy->setRelation('teacher', $teacher);
             $legacy->setRelation('students', new EloquentCollection($students->all()));
-            $legacy->setAttribute('observations_count', $occurrence->observations_count);
 
             return $legacy;
         })->values();
@@ -221,6 +220,7 @@ class SchedulingReadModelService
             $legacy->setRelation('schoolClass', $schoolClass);
             $legacy->setRelation('teacher', $teacher);
             $legacy->setRelation('students', new EloquentCollection($students->all()));
+            $legacy->setAttribute('observations_count', $occurrence->observations_count);
 
             return $legacy;
         })->values();
