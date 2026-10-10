@@ -59,7 +59,7 @@ class SessionController extends Controller
 
     public function updateNote(Request $request, SessionOccurrence $sessionOccurrence): RedirectResponse
     {
-        $this->authorizeTeacherSession($request, $classSession);
+        $this->authorizeTeacherOccurrence($request, $sessionOccurrence);
         $validated = $request->validate([
             'class_note' => ['nullable', 'string', 'max:3000'],
             'follow_up_recommendation' => ['nullable', 'string', 'max:3000'],
@@ -72,7 +72,7 @@ class SessionController extends Controller
 
     public function close(Request $request, SessionOccurrence $sessionOccurrence): RedirectResponse
     {
-        $this->authorizeTeacherSession($request, $classSession);
+        $this->authorizeTeacherOccurrence($request, $sessionOccurrence);
         $validated = $request->validate([
             'class_note' => ['nullable', 'string', 'max:3000'],
             'follow_up_recommendation' => ['nullable', 'string', 'max:3000'],
@@ -88,7 +88,7 @@ class SessionController extends Controller
 
     public function destroy(Request $request, SessionOccurrence $sessionOccurrence): RedirectResponse
     {
-        $this->authorizeTeacherSession($request, $classSession);
+        $this->authorizeTeacherOccurrence($request, $sessionOccurrence);
         $this->sessionWrites->destroyOccurrence($sessionOccurrence, $request->user());
 
         return back()->with('status', 'Sesi belajar berhasil dihapus.');
