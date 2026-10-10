@@ -24,13 +24,19 @@ class SessionController extends Controller
     public function createFromSchedule(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'session_template_id' => ['required', 'exists:session_templates,id'],
+            'session_template_id' => ['nullable', 'required_without:weekly_schedule_id', 'exists:session_templates,id'],
+            'weekly_schedule_id' => ['nullable', 'required_without:session_template_id', 'exists:weekly_schedules,id'],
             'session_date' => ['required', 'date'],
         ]);
 
         $template = SessionTemplate::query()
             ->whereNull('legacy_deleted_at')
-            ->findOrFail($validated['session_template_id']);
+            ->when(
+                $validated['session_template_id'] ?? null,
+                fn ($query) => $query->whereKey((int) $validated['session_template_id']),
+                fn ($query) => $query->where('legacy_weekly_schedule_id', (int) $validated['weekly_schedule_id']),
+            )
+            ->firstOrFail();
         $this->authorizeTeacherTemplate($request, $template);
         $this->sessionWrites->createFromTemplate($template, $validated['session_date'], $request->user());
 
