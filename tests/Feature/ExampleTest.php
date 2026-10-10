@@ -10,6 +10,7 @@ use App\Models\Indicator;
 use App\Models\Observation;
 use App\Models\Report;
 use App\Models\SchoolClass;
+use App\Models\SessionOccurrence;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\Term;
@@ -344,6 +345,9 @@ class ExampleTest extends TestCase
             ->where('weekly_schedule_id', $schedule->id)
             ->whereDate('session_date', '2026-06-08')
             ->firstOrFail();
+        $occurrence = SessionOccurrence::query()
+            ->where('legacy_class_session_id', $session->id)
+            ->firstOrFail();
 
         $this->assertSame($session->students()->count(), $session->attendances()->whereNull('marked_at')->count());
 
@@ -352,7 +356,7 @@ class ExampleTest extends TestCase
             ->mapWithKeys(fn ($studentId) => [$studentId => ['status' => 'unmarked', 'note' => null]])
             ->all();
 
-        $this->patch(route('alpha.process.sessions.attendance', $session), [
+        $this->patch(route('alpha.process.sessions.attendance', $occurrence), [
             'attendance_action' => 'all_present',
             'attendance' => $payload,
         ])->assertRedirect()
@@ -541,7 +545,11 @@ class ExampleTest extends TestCase
             config()->set('montessori.session.write_source', $previousSource);
         }
 
-        $this->from('/process/sessions')->patch(route('alpha.process.sessions.update', $session), [
+        $occurrence = SessionOccurrence::query()
+            ->where('legacy_class_session_id', $session->id)
+            ->firstOrFail();
+
+        $this->from('/process/sessions')->patch(route('alpha.process.sessions.update', $occurrence), [
             'school_class_id' => $glow->id,
             'teacher_id' => $mira->id,
             'room' => 'Ruang Tes',
