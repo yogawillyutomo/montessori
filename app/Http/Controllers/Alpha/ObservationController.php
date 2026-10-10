@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Alpha;
 
 use App\Http\Controllers\Controller;
+use App\Models\ChildSessionBooking;
 use App\Models\ClassSession;
 use App\Models\Indicator;
 use App\Models\Observation;
+use App\Models\SessionOccurrence;
 use App\Models\Teacher;
 use App\Services\Alpha\AccessScopeService;
 use App\Services\Pedagogy\FollowUpCandidateService;
@@ -38,8 +40,9 @@ class ObservationController extends Controller
             abort_if(! in_array((int) $validated['student_id'], $scope->accessibleStudentIds($request->user()), true), 403);
 
             $classSession = ClassSession::query()->findOrFail($validated['class_session_id']);
-            $this->authorizeTeacherSession($request, $classSession, $scope);
-            $this->assertSessionStudent($classSession, (int) $validated['student_id']);
+            $occurrence = $this->resolveOccurrence($classSession);
+            $this->authorizeTeacherOccurrence($request, $occurrence, $scope);
+            $this->assertOccurrenceStudent($occurrence, (int) $validated['student_id']);
 
             $createdCount = 0;
             foreach ($validated['observations'] as $indicatorId => $row) {
@@ -49,6 +52,7 @@ class ObservationController extends Controller
 
                 $observation = Observation::query()->create([
                     'class_session_id' => $classSession->id,
+                    'session_occurrence_id' => $occurrence->id,
                     'student_id' => $validated['student_id'],
                     'indicator_id' => $indicator->id,
                     'development_area_id' => $indicator->development_area_id,
@@ -90,10 +94,12 @@ class ObservationController extends Controller
         abort_if(! in_array((int) $validated['student_id'], $scope->accessibleStudentIds($request->user()), true), 403);
 
         $classSession = null;
+        $occurrence = null;
         if ($validated['class_session_id'] ?? null) {
             $classSession = ClassSession::query()->findOrFail($validated['class_session_id']);
-            $this->authorizeTeacherSession($request, $classSession, $scope);
-            $this->assertSessionStudent($classSession, (int) $validated['student_id']);
+            $occurrence = $this->resolveOccurrence($classSession);
+            $this->authorizeTeacherOccurrence($request, $occurrence, $scope);
+            $this->assertOccurrenceStudent($occurrence, (int) $validated['student_id']);
         }
 
         $indicator = isset($validated['indicator_id'])
@@ -109,6 +115,7 @@ class ObservationController extends Controller
         $includeInReport = $request->boolean('include_in_report');
         $observation = Observation::query()->create([
             'class_session_id' => $classSession?->id,
+            'session_occurrence_id' => $occurrence?->id,
             'student_id' => $validated['student_id'],
             'indicator_id' => $indicator?->id,
             'development_area_id' => $validated['development_area_id'],
@@ -140,26 +147,43 @@ class ObservationController extends Controller
         }
     }
 
-    private function authorizeTeacherSession(
+    private function resolveOccurrence(ClassSession $classSession): SessionOccurrence
+    {
+        $occurrence = SessionOccurrence::query()
+            ->where('legacy_class_session_id', $classSession->id)
+            ->whereNull('legacy_deleted_at')
+            ->first();
+
+        if (! $occurrence) {
+            throw ValidationException::withMessages([
+                'class_session_id' => 'Canonical SessionOccurrence untuk sesi observasi tidak ditemukan.',
+            ]);
+        }
+
+        return $occurrence;
+    }
+
+    private function authorizeTeacherOccurrence(
         Request $request,
-        ClassSession $classSession,
+        SessionOccurrence $occurrence,
         AccessScopeService $scope,
     ): void {
         $teacher = $scope->teacherFor($request->user());
 
-        abort_if($teacher && (int) $classSession->teacher_id !== $teacher->id, 403);
+        abort_if($teacher && (int) $occurrence->legacy_teacher_id !== $teacher->id, 403);
     }
 
-    private function assertSessionStudent(ClassSession $classSession, int $studentId): void
+    private function assertOccurrenceStudent(SessionOccurrence $occurrence, int $studentId): void
     {
-        $sessionStudentExists = $classSession
-            ->students()
-            ->whereKey($studentId)
+        $bookingExists = ChildSessionBooking::query()
+            ->where('session_occurrence_id', $occurrence->id)
+            ->where('student_id', $studentId)
+            ->whereIn('status', ChildSessionBooking::ACTIVE_STATUSES)
             ->exists();
 
-        if (! $sessionStudentExists) {
+        if (! $bookingExists) {
             throw ValidationException::withMessages([
-                'student_id' => 'Siswa harus terdaftar pada sesi belajar yang dipilih.',
+                'student_id' => 'Siswa harus memiliki booking aktif pada sesi belajar yang dipilih.',
             ]);
         }
     }

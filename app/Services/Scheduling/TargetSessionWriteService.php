@@ -207,7 +207,12 @@ class TargetSessionWriteService
                 ]);
             }
 
-            if (Observation::query()->where('class_session_id', $session->id)->exists()
+            if (Observation::query()
+                ->where(function ($query) use ($occurrence, $session): void {
+                    $query->where('session_occurrence_id', $occurrence->id)
+                        ->orWhere('class_session_id', $session->id);
+                })
+                ->exists()
                 || $occurrence->presentations()->exists()) {
                 throw ValidationException::withMessages([
                     'session' => 'Session yang sudah memiliki evidence pedagogis tidak boleh dihapus.',

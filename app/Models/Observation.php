@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-#[Fillable(['class_session_id', 'student_id', 'indicator_id', 'development_area_id', 'teacher_id', 'observation_type', 'observed_on', 'level', 'status', 'score', 'note', 'needs_follow_up', 'include_in_report'])]
+#[Fillable(['class_session_id', 'session_occurrence_id', 'student_id', 'indicator_id', 'development_area_id', 'teacher_id', 'observation_type', 'observed_on', 'level', 'status', 'score', 'note', 'needs_follow_up', 'include_in_report'])]
 class Observation extends Model
 {
     use HasFactory;
@@ -56,6 +56,11 @@ class Observation extends Model
     public function classSession(): BelongsTo
     {
         return $this->belongsTo(ClassSession::class);
+    }
+
+    public function sessionOccurrence(): BelongsTo
+    {
+        return $this->belongsTo(SessionOccurrence::class);
     }
 
     public function student(): BelongsTo
