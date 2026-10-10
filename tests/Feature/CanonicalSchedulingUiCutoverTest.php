@@ -48,7 +48,7 @@ class CanonicalSchedulingUiCutoverTest extends TestCase
         $admin = $this->admin();
 
         $this->actingAs($admin)
-            ->get(route('alpha.process.schedules'))
+            ->get(route('alpha.process.attendance', ['date' => '2026-06-08']))
             ->assertOk()
             ->assertSee('name="session_template_id"', false)
             ->assertDontSee('name="weekly_schedule_id"', false);
