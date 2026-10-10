@@ -473,12 +473,19 @@ class DatabaseSeeder extends Seeder
         $createdObservations = [];
         foreach ($observationRows as [$sessionKey, $studentKey, $indicatorCode, $teacherKey, $level, $needsFollowUp, $note]) {
             $indicator = $indicators[$indicatorCode];
+            $sessionOccurrenceId = $sessions[$sessionKey]->sessionOccurrence()->value('id');
+
+            if ($sessionOccurrenceId === null) {
+                throw new RuntimeException("Seeded session {$sessions[$sessionKey]->id} is missing its canonical SessionOccurrence.");
+            }
+
             $observation = Observation::query()->updateOrCreate([
                 'class_session_id' => $sessions[$sessionKey]->id,
                 'student_id' => $students[$studentKey]->id,
                 'indicator_id' => $indicator->id,
                 'observed_on' => $sessions[$sessionKey]->session_date,
             ], [
+                'session_occurrence_id' => $sessionOccurrenceId,
                 'teacher_id' => $teachers[$teacherKey]->id,
                 'development_area_id' => $indicator->development_area_id,
                 'observation_type' => 'scheduled',
