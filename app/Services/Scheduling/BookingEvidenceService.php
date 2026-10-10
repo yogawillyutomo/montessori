@@ -45,8 +45,13 @@ class BookingEvidenceService
 
     public function hasObservationEvidence(ChildSessionBooking $booking): bool
     {
-        if (! $booking->legacy_class_session_id) {
-            return false;
+        $targetEvidence = Observation::query()
+            ->where('session_occurrence_id', $booking->session_occurrence_id)
+            ->where('student_id', $booking->student_id)
+            ->exists();
+
+        if ($targetEvidence || ! $booking->legacy_class_session_id) {
+            return $targetEvidence;
         }
 
         return Observation::query()
