@@ -20,14 +20,14 @@ class AttendanceSemanticsTest extends TestCase
         $this->actingAs($this->admin());
 
         $session = $this->createMondaySession();
-        $attendanceIds = $session->attendances()->pluck('id');
+        $attendanceIds = $session->attendances()->pluck('attendances.id');
 
         $this->assertSame($session->students()->count(), $session->attendances()->count());
         $this->assertSame(
             $session->students()->count(),
-            $session->attendances()->where('status', 'unmarked')->whereNull('marked_at')->count()
+            $session->attendances()->where('attendances.status', 'unmarked')->whereNull('attendances.marked_at')->count()
         );
-        $this->assertSame(0, $session->attendances()->where('status', 'present')->count());
+        $this->assertSame(0, $session->attendances()->where('attendances.status', 'present')->count());
         $this->assertSame(0, AttendanceAudit::query()->whereIn('attendance_id', $attendanceIds)->count());
     }
 
@@ -48,7 +48,7 @@ class AttendanceSemanticsTest extends TestCase
             'attendance' => $payload,
         ])->assertRedirect()->assertSessionDoesntHaveErrors();
 
-        $firstAttendance = $session->attendances()->where('student_id', $studentIds[0])->firstOrFail();
+        $firstAttendance = $session->attendances()->where('attendances.student_id', $studentIds[0])->firstOrFail();
         $this->assertSame('present', $firstAttendance->status);
         $this->assertNotNull($firstAttendance->marked_at);
 
@@ -119,7 +119,7 @@ class AttendanceSemanticsTest extends TestCase
             Carbon::setTestNow();
         }
 
-        $attendance = $session->attendances()->where('student_id', $studentId)->firstOrFail();
+        $attendance = $session->attendances()->where('attendances.student_id', $studentId)->firstOrFail();
         $this->assertSame('present', $attendance->status);
         $this->assertSame('2026-06-10', $attendance->marked_at->toDateString());
         $this->assertSame('2026-06-08', $session->occurs_on->toDateString());
