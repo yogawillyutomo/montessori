@@ -45,6 +45,7 @@ class LegacyContractionReadinessService
                 'legacy_class_session_student_id',
                 fn (): int => $this->sessionBookingMismatchCount(),
             ),
+            'scheduled_observation_occurrences' => $this->scheduledObservationCheck(),
             'marked_attendance_bookings' => $this->markedAttendanceCheck(),
         ];
     }
@@ -186,6 +187,63 @@ class LegacyContractionReadinessService
                     ->orWhereColumn('occurrence.legacy_class_session_id', '!=', 'legacy.class_session_id');
             })
             ->count();
+    }
+
+    /**
+     * @return array{
+     *     legacy_total: int,
+     *     mapped_total: int,
+     *     missing_total: int,
+     *     duplicate_total: int,
+     *     mismatch_total: int,
+     *     table_ready: bool
+     * }
+     */
+    private function scheduledObservationCheck(): array
+    {
+        $observationExists = Schema::hasTable('observations');
+        $occurrenceExists = Schema::hasTable('session_occurrences');
+        $legacyTotal = $observationExists
+            ? DB::table('observations')->whereNotNull('class_session_id')->count()
+            : 0;
+
+        if (! $observationExists
+            || ! $occurrenceExists
+            || ! Schema::hasColumn('observations', 'session_occurrence_id')) {
+            return [
+                'legacy_total' => $legacyTotal,
+                'mapped_total' => 0,
+                'missing_total' => $legacyTotal,
+                'duplicate_total' => 0,
+                'mismatch_total' => 0,
+                'table_ready' => false,
+            ];
+        }
+
+        $mappedTotal = DB::table('observations')
+            ->whereNotNull('class_session_id')
+            ->whereNotNull('session_occurrence_id')
+            ->count();
+
+        $mismatchTotal = DB::table('observations as observation')
+            ->leftJoin('session_occurrences as occurrence', 'occurrence.id', '=', 'observation.session_occurrence_id')
+            ->whereNotNull('observation.class_session_id')
+            ->where(function ($query): void {
+                $query->whereNull('observation.session_occurrence_id')
+                    ->orWhereNull('occurrence.id')
+                    ->orWhereNull('occurrence.legacy_class_session_id')
+                    ->orWhereColumn('occurrence.legacy_class_session_id', '!=', 'observation.class_session_id');
+            })
+            ->count();
+
+        return [
+            'legacy_total' => $legacyTotal,
+            'mapped_total' => $mappedTotal,
+            'missing_total' => max(0, $legacyTotal - $mappedTotal),
+            'duplicate_total' => 0,
+            'mismatch_total' => $mismatchTotal,
+            'table_ready' => true,
+        ];
     }
 
     /**
