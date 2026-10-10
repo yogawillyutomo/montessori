@@ -75,6 +75,57 @@ class ObservationSessionOccurrenceCutoverTest extends TestCase
         ]);
     }
 
+    public function test_scheduled_observation_uses_target_authority_when_legacy_teacher_and_pivot_are_stale(): void
+    {
+        $this->seed();
+
+        $teacherUser = User::query()->where('email', 'raras@montessori.test')->firstOrFail();
+        $session = ClassSession::query()
+            ->whereHas('teacher', fn ($query) => $query->where('user_id', $teacherUser->id))
+            ->whereHas('students', fn ($query) => $query->where('code', 'SUN01'))
+            ->firstOrFail();
+        $student = $session->students()->where('code', 'SUN01')->firstOrFail();
+        $indicator = Indicator::query()->where('code', 'BHS02')->firstOrFail();
+        $occurrence = SessionOccurrence::query()
+            ->where('legacy_class_session_id', $session->id)
+            ->firstOrFail();
+        $otherTeacherId = DB::table('teachers')
+            ->where('id', '!=', $occurrence->legacy_teacher_id)
+            ->orderBy('id')
+            ->value('id');
+
+        $this->assertNotNull($otherTeacherId);
+
+        DB::table('class_sessions')
+            ->where('id', $session->id)
+            ->update(['teacher_id' => $otherTeacherId]);
+        DB::table('class_session_student')
+            ->where('class_session_id', $session->id)
+            ->where('student_id', $student->id)
+            ->delete();
+
+        $this->actingAs($teacherUser)
+            ->post(route('alpha.observations.store'), [
+                'class_session_id' => $session->id,
+                'student_id' => $student->id,
+                'teacher_id' => $occurrence->legacy_teacher_id,
+                'observed_on' => $session->session_date->toDateString(),
+                'note' => 'Canonical occurrence and booking remain authoritative.',
+                'observations' => [
+                    $indicator->id => ['status' => 'developing'],
+                ],
+            ])
+            ->assertRedirect()
+            ->assertSessionDoesntHaveErrors();
+
+        $this->assertDatabaseHas('observations', [
+            'session_occurrence_id' => $occurrence->id,
+            'student_id' => $student->id,
+            'teacher_id' => $occurrence->legacy_teacher_id,
+            'indicator_id' => $indicator->id,
+        ]);
+    }
+
     public function test_booking_evidence_uses_target_observation_link_without_legacy_observation_fk(): void
     {
         $this->seed();
