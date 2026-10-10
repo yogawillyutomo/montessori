@@ -127,6 +127,42 @@ class CanonicalSchedulingUiCutoverTest extends TestCase
         ]);
     }
 
+    public function test_process_attendance_page_reads_occurrence_when_legacy_session_is_stale(): void
+    {
+        $this->seed();
+        $admin = $this->admin();
+
+        $occurrence = SessionOccurrence::query()
+            ->whereNotNull('legacy_class_session_id')
+            ->whereNull('legacy_deleted_at')
+            ->orderBy('id')
+            ->firstOrFail();
+        $legacyId = (int) $occurrence->legacy_class_session_id;
+
+        DB::table('session_occurrences')
+            ->where('id', $occurrence->id)
+            ->update([
+                'room' => 'Canonical Attendance Room',
+                'legacy_topic' => 'Canonical Attendance Topic',
+            ]);
+        DB::table('class_sessions')
+            ->where('id', $legacyId)
+            ->update([
+                'room' => 'STALE ATTENDANCE ROOM',
+                'topic' => 'STALE ATTENDANCE TOPIC',
+            ]);
+
+        $this->actingAs($admin)
+            ->get(route('alpha.process.attendance', [
+                'date' => $occurrence->occurs_on->toDateString(),
+            ]))
+            ->assertOk()
+            ->assertSee('Canonical Attendance Room')
+            ->assertSee('Canonical Attendance Topic')
+            ->assertDontSee('STALE ATTENDANCE ROOM')
+            ->assertDontSee('STALE ATTENDANCE TOPIC');
+    }
+
     public function test_session_ui_uses_occurrence_id_when_legacy_mirror_id_diverges(): void
     {
         $this->seed();
