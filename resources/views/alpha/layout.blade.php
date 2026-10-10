@@ -174,14 +174,19 @@
         </form>
     </dialog>
 @endauth
-<dialog class="modal" id="confirm-delete-dialog">
+<dialog class="modal delete-confirm-modal" id="confirm-delete-dialog">
     <form method="post" id="confirm-delete-form">
         @csrf
         @method('delete')
         <div class="modal-head">
-            <div>
-                <h3>Konfirmasi Hapus</h3>
-                <div class="meta" id="confirm-delete-message">Data yang dihapus tidak selalu bisa dikembalikan.</div>
+            <div class="confirm-delete-heading">
+                <div class="confirm-action-icon confirm-action-icon-danger" aria-hidden="true">
+                    <i data-lucide="trash-2"></i>
+                </div>
+                <div>
+                    <h3>Konfirmasi Hapus</h3>
+                    <div class="meta" id="confirm-delete-message">Data yang dihapus tidak selalu bisa dikembalikan.</div>
+                </div>
             </div>
             <button class="icon-btn" type="button" data-modal-close aria-label="Tutup">
                 <i data-lucide="x" class="nav-icon"></i>
@@ -192,6 +197,27 @@
             <button class="btn danger" type="submit">Ya, hapus</button>
         </div>
     </form>
+</dialog>
+<dialog class="modal confirm-action-modal" id="confirm-action-dialog">
+    <div class="modal-body confirm-action-body">
+        <div class="confirm-action-top">
+            <div class="confirm-action-icon" aria-hidden="true">
+                <i data-lucide="help-circle"></i>
+            </div>
+            <button class="icon-btn confirm-action-close" type="button" data-modal-close aria-label="Tutup">
+                <i data-lucide="x" class="nav-icon"></i>
+            </button>
+        </div>
+        <div class="confirm-action-copy">
+            <span class="confirm-action-kicker">Konfirmasi</span>
+            <h3 id="confirm-action-title">Konfirmasi Tindakan</h3>
+            <p class="meta" id="confirm-action-message">Pastikan tindakan ini memang ingin dilanjutkan.</p>
+        </div>
+        <div class="toolbar modal-actions confirm-action-actions">
+            <button class="btn ghost" type="button" data-modal-close>Batal</button>
+            <button class="btn primary" type="button" id="confirm-action-submit">Lanjutkan</button>
+        </div>
+    </div>
 </dialog>
 @if ($errors->any() && old('_modal'))
     <template id="modal-error-template">
@@ -234,12 +260,63 @@
         });
     });
 
+    const confirmActionDialog = document.getElementById('confirm-action-dialog');
+    const confirmActionTitle = document.getElementById('confirm-action-title');
+    const confirmActionMessage = document.getElementById('confirm-action-message');
+    const confirmActionSubmit = document.getElementById('confirm-action-submit');
+    let pendingConfirmTrigger = null;
+
     document.querySelectorAll('[data-confirm]').forEach((trigger) => {
         trigger.addEventListener('click', (event) => {
-            if (!window.confirm(trigger.dataset.confirm)) {
-                event.preventDefault();
+            if (!confirmActionDialog?.showModal) {
+                return;
             }
+
+            event.preventDefault();
+            pendingConfirmTrigger = trigger;
+
+            const triggerLabel = trigger.textContent.trim();
+            confirmActionTitle.textContent = trigger.dataset.confirmTitle
+                || (triggerLabel ? `${triggerLabel}?` : 'Konfirmasi Tindakan');
+            confirmActionMessage.textContent = trigger.dataset.confirm
+                || 'Pastikan tindakan ini memang ingin dilanjutkan.';
+            confirmActionSubmit.textContent = trigger.dataset.confirmLabel
+                || triggerLabel
+                || 'Lanjutkan';
+            confirmActionSubmit.className = trigger.classList.contains('danger')
+                ? 'btn danger'
+                : trigger.classList.contains('teal')
+                    ? 'btn teal'
+                    : 'btn primary';
+
+            confirmActionDialog.showModal();
         });
+    });
+
+    confirmActionSubmit?.addEventListener('click', () => {
+        const trigger = pendingConfirmTrigger;
+        if (!trigger) {
+            confirmActionDialog?.close();
+
+            return;
+        }
+
+        pendingConfirmTrigger = null;
+        confirmActionDialog?.close();
+
+        if (trigger.form) {
+            trigger.form.requestSubmit(trigger);
+
+            return;
+        }
+
+        if (trigger instanceof HTMLAnchorElement && trigger.href) {
+            window.location.assign(trigger.href);
+        }
+    });
+
+    confirmActionDialog?.addEventListener('close', () => {
+        pendingConfirmTrigger = null;
     });
 
     document.querySelectorAll('dialog form').forEach((form) => {
@@ -479,22 +556,47 @@
             return local.toISOString().slice(0, 10);
         };
 
-        const nextDateForDay = (day) => {
-            const targetDay = Number(day);
-            const today = new Date();
-            const currentDay = today.getDay() === 0 ? 7 : today.getDay();
-            const dayOffset = (targetDay - currentDay + 7) % 7;
-            today.setDate(today.getDate() + dayOffset);
+        const isoDayOfWeek = (isoDate) => {
+            const [year, month, day] = String(isoDate || '').split('-').map(Number);
+            if (!year || !month || !day) {
+                return null;
+            }
 
-            return toIsoDate(today);
+            const date = new Date(year, month - 1, day);
+            const jsDay = date.getDay();
+
+            return jsDay === 0 ? 7 : jsDay;
+        };
+
+        const nextDateForDay = (day, anchorValue = dateInput.value) => {
+            const targetDay = Number(day);
+            let anchor = new Date();
+
+            if (anchorValue) {
+                const [year, month, date] = anchorValue.split('-').map(Number);
+                if (year && month && date) {
+                    anchor = new Date(year, month - 1, date);
+                }
+            }
+
+            const currentDay = anchor.getDay() === 0 ? 7 : anchor.getDay();
+            const dayOffset = (targetDay - currentDay + 7) % 7;
+            anchor.setDate(anchor.getDate() + dayOffset);
+
+            return toIsoDate(anchor);
         };
 
         select.addEventListener('change', () => {
             const selected = select.selectedOptions[0];
             const day = selected?.dataset.day;
 
-            if (day) {
-                dateInput.value = nextDateForDay(day);
+            if (!day) {
+                return;
+            }
+
+            const targetDay = Number(day);
+            if (!dateInput.value || isoDayOfWeek(dateInput.value) !== targetDay) {
+                dateInput.value = nextDateForDay(day, dateInput.value);
             }
         });
     });

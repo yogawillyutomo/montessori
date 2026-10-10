@@ -42,8 +42,8 @@ class SchoolClass extends Model
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, self>  $classes
-     * @return \Illuminate\Support\Collection<int, self>
+     * @param  Collection<int, self>  $classes
+     * @return Collection<int, self>
      */
     public static function naturalSort(Collection $classes): Collection
     {

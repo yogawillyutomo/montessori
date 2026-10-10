@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\ChildEnrollment;
 use App\Models\ChildSessionBooking;
 use App\Models\ClassLevel;
+use App\Models\ClassSession;
 use App\Models\MakeupEligibility;
 use App\Models\SessionCredit;
 use App\Models\SessionOccurrence;
@@ -18,6 +19,7 @@ use App\Services\Entitlement\CreditAllocationService;
 use App\Services\Entitlement\EntitlementPeriodService;
 use App\Services\Scheduling\BookingRescheduleService;
 use App\Services\Scheduling\ChildBookingCancellationService;
+use App\Services\Scheduling\LegacySessionCompatibilityWriter;
 use App\Services\Scheduling\MakeupBookingService;
 use App\Services\Scheduling\SessionOccurrenceCancellationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -151,7 +153,7 @@ class AttendanceCreditMakeupTest extends TestCase
             $admin,
         );
         $eligibility = MakeupEligibility::query()->where('session_credit_id', $credit->id)->firstOrFail();
-        $destinationOccurrence = $this->occurrence('2026-10-05');
+        $destinationOccurrence = $this->compatibilityOccurrence('2026-10-05');
 
         $movement = app(MakeupBookingService::class)->schedule(
             $eligibility,
@@ -177,7 +179,7 @@ class AttendanceCreditMakeupTest extends TestCase
         );
 
         $this->assertSame($destination->id, $destinationAttendance->child_session_booking_id);
-        $this->assertNull($destinationAttendance->class_session_id);
+        $this->assertSame($destination->legacy_class_session_id, $destinationAttendance->class_session_id);
         $this->assertSame('used', $credit->fresh()->status);
         $this->assertSame('fulfilled', $eligibility->fresh()->status);
         $this->assertSame($destination->id, $eligibility->fresh()->fulfilled_by_booking_id);
@@ -222,7 +224,7 @@ class AttendanceCreditMakeupTest extends TestCase
         $eligibility = MakeupEligibility::query()->where('session_credit_id', $credit->id)->firstOrFail();
         $movement = app(MakeupBookingService::class)->schedule(
             $eligibility,
-            $this->occurrence('2026-09-14'),
+            $this->compatibilityOccurrence('2026-09-14'),
             $admin,
             'Makeup scheduled.',
         );
@@ -374,5 +376,26 @@ class AttendanceCreditMakeupTest extends TestCase
             'room' => 'M8 '.$date,
             'status' => 'planned',
         ]);
+    }
+
+    private function compatibilityOccurrence(string $date): SessionOccurrence
+    {
+        $base = ClassSession::query()->firstOrFail();
+        $occurrence = SessionOccurrence::query()->create([
+            'session_template_id' => null,
+            'environment_id' => null,
+            'occurs_on' => $date,
+            'starts_at' => '10:00',
+            'ends_at' => '11:00',
+            'capacity' => 8,
+            'room' => 'M8 '.$date,
+            'status' => 'planned',
+            'legacy_school_class_id' => $base->school_class_id,
+            'legacy_teacher_id' => $base->teacher_id,
+        ]);
+
+        app(LegacySessionCompatibilityWriter::class)->syncOccurrence($occurrence);
+
+        return $occurrence->fresh();
     }
 }

@@ -5,6 +5,7 @@ namespace App\Services\Scheduling;
 use App\Models\Attendance;
 use App\Models\ChildSessionBooking;
 use App\Models\Observation;
+use App\Models\Presentation;
 
 class BookingEvidenceService
 {
@@ -50,6 +51,14 @@ class BookingEvidenceService
 
         return Observation::query()
             ->where('class_session_id', $booking->legacy_class_session_id)
+            ->where('student_id', $booking->student_id)
+            ->exists();
+    }
+
+    public function hasPresentationEvidence(ChildSessionBooking $booking): bool
+    {
+        return Presentation::query()
+            ->where('session_occurrence_id', $booking->session_occurrence_id)
             ->where('student_id', $booking->student_id)
             ->exists();
     }

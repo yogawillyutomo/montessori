@@ -53,11 +53,19 @@ class ClassSession extends Model
         });
 
         static::saved(function (ClassSession $session): void {
+            if (config('montessori.session.write_source', 'target') !== 'legacy') {
+                return;
+            }
+
             app(LegacySessionBridgeService::class)->syncOccurrence($session);
             app(LegacyBookingBridgeService::class)->syncBookingsForSession($session);
         });
 
         static::deleted(function (ClassSession $session): void {
+            if (config('montessori.session.write_source', 'target') !== 'legacy') {
+                return;
+            }
+
             app(LegacySessionBridgeService::class)->markOccurrenceLegacyDeleted($session);
             app(LegacyBookingBridgeService::class)->markBookingsForLegacySessionDeleted($session);
         });
@@ -116,9 +124,7 @@ class ClassSession extends Model
         return $this->belongsTo(User::class, 'closed_by');
     }
 
-    /**
-     * @return array<string, int>
-     */
+    /** @return array<string, int> */
     public function attendanceRecap(): array
     {
         $attendances = $this->attendances;

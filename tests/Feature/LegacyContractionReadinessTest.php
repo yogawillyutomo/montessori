@@ -86,6 +86,54 @@ class LegacyContractionReadinessTest extends TestCase
         $this->artisan('legacy:reconcile')->assertExitCode(1);
     }
 
+    public function test_gate_treats_equivalent_session_date_serializations_as_the_same_calendar_date(): void
+    {
+        $this->seed();
+        $this->linkSeededMarkedAttendancesToBookings();
+
+        $legacy = DB::table('class_sessions')->orderBy('id')->first();
+        $this->assertNotNull($legacy);
+
+        $occurrenceId = DB::table('session_occurrences')
+            ->where('legacy_class_session_id', $legacy->id)
+            ->value('id');
+        $this->assertNotNull($occurrenceId);
+
+        DB::table('session_occurrences')
+            ->where('id', $occurrenceId)
+            ->update([
+                'occurs_on' => substr((string) $legacy->session_date, 0, 10).' 00:00:00',
+            ]);
+
+        $report = app(LegacyContractionReadinessService::class)->report();
+
+        $this->assertSame(0, $report['session_occurrences']['mismatch_total']);
+    }
+
+    public function test_gate_detects_true_session_occurrence_date_drift(): void
+    {
+        $this->seed();
+        $this->linkSeededMarkedAttendancesToBookings();
+
+        $legacy = DB::table('class_sessions')->orderBy('id')->first();
+        $this->assertNotNull($legacy);
+
+        $occurrenceId = DB::table('session_occurrences')
+            ->where('legacy_class_session_id', $legacy->id)
+            ->value('id');
+        $this->assertNotNull($occurrenceId);
+
+        DB::table('session_occurrences')
+            ->where('id', $occurrenceId)
+            ->update(['occurs_on' => '2099-12-31']);
+
+        $readiness = app(LegacyContractionReadinessService::class);
+        $report = $readiness->report();
+
+        $this->assertSame(1, $report['session_occurrences']['mismatch_total']);
+        $this->assertFalse($readiness->dataReady());
+    }
+
     public function test_gate_blocks_marked_attendance_without_booking_linkage(): void
     {
         $this->seed();

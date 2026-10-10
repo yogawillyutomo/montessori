@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\Scheduling\BookingLineageService;
 use App\Services\Scheduling\BookingRescheduleService;
 use App\Services\Scheduling\ChildBookingCancellationService;
+use App\Services\Scheduling\LegacySessionCompatibilityWriter;
 use App\Services\Scheduling\SessionOccurrenceCancellationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
@@ -306,7 +307,8 @@ class BookingMovementRescheduleTest extends TestCase
 
     private function occurrence(string $date, string $startsAt, string $endsAt, int $capacity): SessionOccurrence
     {
-        return SessionOccurrence::query()->create([
+        $base = ClassSession::query()->firstOrFail();
+        $occurrence = SessionOccurrence::query()->create([
             'session_template_id' => null,
             'environment_id' => null,
             'occurs_on' => $date,
@@ -315,52 +317,78 @@ class BookingMovementRescheduleTest extends TestCase
             'capacity' => $capacity,
             'room' => 'M5 Target Room',
             'status' => 'planned',
+            'legacy_school_class_id' => $base->school_class_id,
+            'legacy_teacher_id' => $base->teacher_id,
         ]);
+
+        app(LegacySessionCompatibilityWriter::class)->syncOccurrence($occurrence);
+
+        return $occurrence->fresh();
     }
 
     private function booking(Student $student, SessionOccurrence $occurrence): ChildSessionBooking
     {
-        return ChildSessionBooking::query()->create([
+        $booking = ChildSessionBooking::query()->create([
             'student_id' => $student->id,
             'session_occurrence_id' => $occurrence->id,
             'booking_type' => 'regular',
             'status' => 'scheduled',
             'source_type' => 'test',
         ]);
+
+        $compatibility = app(LegacySessionCompatibilityWriter::class);
+        $compatibility->syncBooking($booking);
+        $compatibility->ensureUnmarkedAttendance($booking);
+
+        return $booking->fresh();
     }
 
     private function legacySession(Student $student, string $date): ClassSession
     {
-        $session = $this->emptyLegacySession($date);
-        $session->students()->attach($student->id);
-        $session->attendances()->firstOrCreate(
-            ['student_id' => $student->id],
-            [
-                'status' => 'unmarked',
-                'note' => null,
-                'marked_by' => null,
-                'marked_at' => null,
-            ]
-        );
+        $previousSource = config('montessori.session.write_source', 'target');
+        config()->set('montessori.session.write_source', 'legacy');
 
-        return $session;
+        try {
+            $session = $this->emptyLegacySession($date);
+            $session->students()->attach($student->id);
+            $session->attendances()->firstOrCreate(
+                ['student_id' => $student->id],
+                [
+                    'status' => 'unmarked',
+                    'note' => null,
+                    'marked_by' => null,
+                    'marked_at' => null,
+                ]
+            );
+
+            return $session;
+        } finally {
+            config()->set('montessori.session.write_source', $previousSource);
+        }
     }
 
     private function emptyLegacySession(string $date): ClassSession
     {
-        $base = ClassSession::query()->firstOrFail();
+        $previousSource = config('montessori.session.write_source', 'target');
+        config()->set('montessori.session.write_source', 'legacy');
 
-        return ClassSession::query()->create([
-            'weekly_schedule_id' => null,
-            'school_class_id' => $base->school_class_id,
-            'teacher_id' => $base->teacher_id,
-            'room' => 'M5 Legacy Room '.$date,
-            'capacity' => 8,
-            'session_date' => $date,
-            'starts_at' => '14:00',
-            'ends_at' => '15:00',
-            'topic' => 'M5 compatibility session',
-            'status' => 'planned',
-        ]);
+        try {
+            $base = ClassSession::query()->firstOrFail();
+
+            return ClassSession::query()->create([
+                'weekly_schedule_id' => null,
+                'school_class_id' => $base->school_class_id,
+                'teacher_id' => $base->teacher_id,
+                'room' => 'M5 Legacy Room '.$date,
+                'capacity' => 8,
+                'session_date' => $date,
+                'starts_at' => '14:00',
+                'ends_at' => '15:00',
+                'topic' => 'M5 compatibility session',
+                'status' => 'planned',
+            ]);
+        } finally {
+            config()->set('montessori.session.write_source', $previousSource);
+        }
     }
 }

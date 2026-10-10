@@ -512,27 +512,34 @@ class ExampleTest extends TestCase
         $raras = Teacher::query()->where('code', 'TCH01')->firstOrFail();
         $mira = Teacher::query()->where('code', 'TCH02')->firstOrFail();
 
-        ClassSession::query()->create([
-            'school_class_id' => $sunny->id,
-            'teacher_id' => $raras->id,
-            'room' => 'Ruang Tes',
-            'session_date' => '2026-06-15',
-            'starts_at' => '08:00',
-            'ends_at' => '09:00',
-            'topic' => 'Sesi pembanding',
-            'status' => 'planned',
-        ]);
+        $previousSource = config('montessori.session.write_source', 'target');
+        config()->set('montessori.session.write_source', 'legacy');
 
-        $session = ClassSession::query()->create([
-            'school_class_id' => $glow->id,
-            'teacher_id' => $mira->id,
-            'room' => 'Ruang Lain',
-            'session_date' => '2026-06-15',
-            'starts_at' => '10:00',
-            'ends_at' => '11:00',
-            'topic' => 'Sesi kandidat',
-            'status' => 'planned',
-        ]);
+        try {
+            ClassSession::query()->create([
+                'school_class_id' => $sunny->id,
+                'teacher_id' => $raras->id,
+                'room' => 'Ruang Tes',
+                'session_date' => '2026-06-15',
+                'starts_at' => '08:00',
+                'ends_at' => '09:00',
+                'topic' => 'Sesi pembanding',
+                'status' => 'planned',
+            ]);
+
+            $session = ClassSession::query()->create([
+                'school_class_id' => $glow->id,
+                'teacher_id' => $mira->id,
+                'room' => 'Ruang Lain',
+                'session_date' => '2026-06-15',
+                'starts_at' => '10:00',
+                'ends_at' => '11:00',
+                'topic' => 'Sesi kandidat',
+                'status' => 'planned',
+            ]);
+        } finally {
+            config()->set('montessori.session.write_source', $previousSource);
+        }
 
         $this->from('/process/sessions')->patch(route('alpha.process.sessions.update', $session), [
             'school_class_id' => $glow->id,
