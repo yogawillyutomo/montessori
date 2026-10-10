@@ -50,8 +50,8 @@ class LegacyContractionAuditService
                 'detail' => 'class_note and follow_up_recommendation still have no approved target-domain home; do not invent one during contraction.',
             ],
             'compatibility_read_model_retired' => [
-                'ready' => false,
-                'detail' => 'SchedulingReadModelService still returns legacy WeeklySchedule/ClassSession compatibility handles to current UI routes.',
+                'ready' => true,
+                'detail' => 'Current process UI reads SessionTemplate/SessionOccurrence directly; SchedulingReadModelService is no longer a live UI route dependency.',
             ],
             'legacy_rollback_retired' => [
                 'ready' => false,
