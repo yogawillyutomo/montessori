@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\Migration\LegacyContractionAuditService;
 use App\Services\Migration\LegacyContractionReadinessService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -16,6 +17,7 @@ Artisan::command('legacy:reconcile', function (LegacyContractionReadinessService
         'student_recurring_schedules' => 'student_weekly_schedule -> recurring_schedules',
         'session_occurrences' => 'class_sessions -> session_occurrences',
         'session_bookings' => 'class_session_student -> child_session_bookings',
+        'scheduled_observation_occurrences' => 'scheduled observations -> session_occurrences',
         'marked_attendance_bookings' => 'marked attendance -> child_session_booking',
     ];
 
@@ -48,3 +50,29 @@ Artisan::command('legacy:reconcile', function (LegacyContractionReadinessService
 
     return 0;
 })->purpose('Reconcile legacy scheduling data against target-domain mappings before contraction');
+
+
+Artisan::command('legacy:contraction-audit', function (LegacyContractionAuditService $audit): int {
+    $report = $audit->report();
+
+    $rows = [];
+    foreach ($report as $key => $check) {
+        $rows[] = [
+            $key,
+            $check['ready'] ? 'READY' : 'BLOCKED',
+            $check['detail'],
+        ];
+    }
+
+    $this->table(['Gate', 'Status', 'Detail'], $rows);
+
+    if (! $audit->deletionReady()) {
+        $this->error('DELETION READINESS: BLOCKED. Keep legacy structures in place.');
+
+        return 1;
+    }
+
+    $this->info('DELETION READINESS: READY.');
+
+    return 0;
+})->purpose('Audit whether legacy scheduling structures are actually safe to delete');
