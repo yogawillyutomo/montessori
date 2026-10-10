@@ -55,7 +55,7 @@
                                     </div>
                                     <span class="status {{ $schedule->is_active ? 'status-achieved' : 'status-empty' }}">{{ $schedule->is_active ? 'Aktif' : 'Nonaktif' }}</span>
                                 </div>
-                                <div class="schedule-topic">{{ $schedule->topic ?: 'Topik belum diisi' }}</div>
+                                <div class="schedule-topic">{{ $schedule->legacy_topic ?: 'Topik belum diisi' }}</div>
                                 <div class="schedule-badge-row">
                                     <span class="chip">{{ $schedule->teacher->name }}</span>
                                     <span class="chip">{{ $schedule->room ?: 'Ruangan belum diisi' }}</span>
@@ -146,7 +146,7 @@
                                                     <label>Kelompok acuan</label>
                                                     <select name="school_class_id" data-schedule-class-select="schedule-{{ $schedule->id }}">
                                                         @foreach ($classes as $class)
-                                                            <option value="{{ $class->id }}" @selected($schedule->school_class_id === $class->id)>{{ $class->name }} - {{ $class->classLevel?->name ?? $class->level }}</option>
+                                                            <option value="{{ $class->id }}" @selected($schedule->legacy_school_class_id === $class->id)>{{ $class->name }} - {{ $class->classLevel?->name ?? $class->level }}</option>
                                                         @endforeach
                                                     </select>
                                                 </div>
@@ -154,7 +154,7 @@
                                                     <label>Guru</label>
                                                     <select name="teacher_id">
                                                         @foreach ($teachers as $teacher)
-                                                            <option value="{{ $teacher->id }}" @selected($schedule->teacher_id === $teacher->id)>{{ $teacher->name }}</option>
+                                                            <option value="{{ $teacher->id }}" @selected($schedule->legacy_teacher_id === $teacher->id)>{{ $teacher->name }}</option>
                                                         @endforeach
                                                     </select>
                                                 </div>
@@ -178,7 +178,7 @@
                                                 </div>
                                                 <div class="field wide">
                                                     <label>Topik</label>
-                                                    <input name="topic" value="{{ old('topic', $schedule->topic) }}">
+                                                    <input name="topic" value="{{ old('topic', $schedule->legacy_topic) }}">
                                                 </div>
                                                 <div class="field wide">
                                                     <label>Peserta default</label>
@@ -317,7 +317,7 @@
             $prevDate = $selectedDate->copy()->subDay()->toDateString();
             $nextDate = $selectedDate->copy()->addDay()->toDateString();
             $attendanceSessions = $sessions
-                ->filter(fn ($session) => $session->session_date->toDateString() === $selectedDate->toDateString())
+                ->filter(fn ($session) => $session->occurs_on->toDateString() === $selectedDate->toDateString())
                 ->sortBy(fn ($session) => $session->starts_at)
                 ->values();
             $defaultSessionDate = old('session_date', $selectedDate->toDateString());
@@ -387,7 +387,7 @@
                     <article class="attendance-session-card">
                         <div class="attendance-session-title">
                             <div>
-                                <h4>{{ strtoupper($session->topic ?: 'Sesi Belajar') }} - {{ strtoupper($session->schoolClass->name) }} ({{ $start }})</h4>
+                                <h4>{{ strtoupper($session->legacy_topic ?: 'Sesi Belajar') }} - {{ strtoupper($session->schoolClass->name) }} ({{ $start }})</h4>
                                 <div class="attendance-time">
                                     <span class="status status-{{ str_replace('_', '-', $session->status) }}">{{ strtoupper($statusLabels[$session->status] ?? $session->status) }}</span>
                                     {{ $start }} - {{ $end }} (+07)
@@ -437,7 +437,7 @@
                                     @method('patch')
                                     <button class="btn teal" type="submit" data-confirm="Tutup sesi belajar ini? Sistem tetap menyimpan sesi meski presensi belum lengkap.">Tutup Sesi</button>
                                 </form>
-                                <button class="btn danger" type="button" data-delete-action="{{ route('alpha.process.sessions.destroy', $session) }}" data-delete-label="Hapus sesi belajar {{ $session->schoolClass->name }} tanggal {{ $session->session_date->format('d M Y') }}? Sesi tidak bisa dihapus jika sudah punya observasi.">Hapus</button>
+                                <button class="btn danger" type="button" data-delete-action="{{ route('alpha.process.sessions.destroy', $session) }}" data-delete-label="Hapus sesi belajar {{ $session->schoolClass->name }} tanggal {{ $session->occurs_on->format('d M Y') }}? Sesi tidak bisa dihapus jika sudah punya observasi.">Hapus</button>
                             @endif
                         </div>
                     </article>
@@ -447,7 +447,7 @@
                             <div class="modal-head">
                                 <div>
                                     <h3>Detail Presensi</h3>
-                                    <div class="meta">{{ $session->session_date->format('d M Y') }} | {{ $start }}-{{ $end }} | {{ $session->schoolClass->name }}</div>
+                                    <div class="meta">{{ $session->occurs_on->format('d M Y') }} | {{ $start }}-{{ $end }} | {{ $session->schoolClass->name }}</div>
                                 </div>
                                 <button class="icon-btn" type="button" data-modal-close aria-label="Tutup"><i data-lucide="x" class="nav-icon"></i></button>
                             </div>
@@ -482,7 +482,7 @@
                                 </div>
                                 <div>
                                     <span class="meta">Topik</span>
-                                    <strong>{{ $session->topic ?: '-' }}</strong>
+                                    <strong>{{ $session->legacy_topic ?: '-' }}</strong>
                                 </div>
                             </div>
                             <div class="table-wrap compact-table session-detail-table">
@@ -525,7 +525,7 @@
                             <div class="modal-head">
                                 <div>
                                     <h3>Panel Presensi</h3>
-                                    <div class="meta">{{ $markedCount }} dari {{ $studentCount }} siswa sudah ditandai | {{ $session->session_date->format('d M Y') }} | {{ $session->schoolClass->name }} | {{ $start }}-{{ $end }}</div>
+                                    <div class="meta">{{ $markedCount }} dari {{ $studentCount }} siswa sudah ditandai | {{ $session->occurs_on->format('d M Y') }} | {{ $session->schoolClass->name }} | {{ $start }}-{{ $end }}</div>
                                 </div>
                                 <button class="icon-btn" type="button" data-modal-close aria-label="Tutup"><i data-lucide="x" class="nav-icon"></i></button>
                             </div>
@@ -572,12 +572,12 @@
                         <dialog class="modal wide-modal" id="{{ $sessionObservationModal }}">
                             <form method="post" action="{{ route('alpha.observations.store') }}">
                                 @csrf
-                                <input type="hidden" name="class_session_id" value="{{ $session->id }}">
-                                <input type="hidden" name="teacher_id" value="{{ $session->teacher_id }}">
+                                <input type="hidden" name="session_occurrence_id" value="{{ $session->id }}">
+                                <input type="hidden" name="teacher_id" value="{{ $session->legacy_teacher_id }}">
                                 <div class="modal-head">
                                     <div>
                                         <h3>Tambah Observasi Cepat</h3>
-                                        <div class="meta">{{ $session->schoolClass->name }} | {{ $session->session_date->format('d M Y') }} | presensi tidak wajib lengkap.</div>
+                                        <div class="meta">{{ $session->schoolClass->name }} | {{ $session->occurs_on->format('d M Y') }} | presensi tidak wajib lengkap.</div>
                                     </div>
                                     <button class="icon-btn" type="button" data-modal-close aria-label="Tutup"><i data-lucide="x" class="nav-icon"></i></button>
                                 </div>
@@ -592,7 +592,7 @@
                                     </div>
                                     <div class="field">
                                         <label>Tanggal</label>
-                                        <input type="date" name="observed_on" value="{{ $session->session_date->toDateString() }}" required>
+                                        <input type="date" name="observed_on" value="{{ $session->occurs_on->toDateString() }}" required>
                                     </div>
                                     <div class="field">
                                         <label>Area perkembangan</label>
@@ -654,11 +654,11 @@
                                 <div class="form-grid">
                                     <div class="field wide">
                                         <label>Catatan kelas</label>
-                                        <textarea name="class_note" placeholder="Ringkasan suasana kelas, dinamika kelompok, atau momen penting.">{{ old('class_note', $session->class_note) }}</textarea>
+                                        <textarea name="class_note" placeholder="Ringkasan suasana kelas, dinamika kelompok, atau momen penting.">{{ old('class_note', $session->legacyClassSession?->class_note) }}</textarea>
                                     </div>
                                     <div class="field wide">
                                         <label>Rekomendasi tindak lanjut</label>
-                                        <textarea name="follow_up_recommendation" placeholder="Rencana follow up untuk sesi berikutnya.">{{ old('follow_up_recommendation', $session->follow_up_recommendation) }}</textarea>
+                                        <textarea name="follow_up_recommendation" placeholder="Rencana follow up untuk sesi berikutnya.">{{ old('follow_up_recommendation', $session->legacyClassSession?->follow_up_recommendation) }}</textarea>
                                     </div>
                                 </div>
                                 <div class="toolbar modal-actions">
@@ -705,8 +705,8 @@
                 </div>
                 <div class="form-grid">
                     <div class="field wide">
-                        <label for="weekly_schedule_id">Slot mingguan</label>
-                        <select id="weekly_schedule_id" name="weekly_schedule_id" data-session-schedule-select required>
+                        <label for="session_template_id">Slot mingguan</label>
+                        <select id="session_template_id" name="session_template_id" data-session-schedule-select required>
                             @foreach ($schedules as $schedule)
                                 @php
                                     $start = \Illuminate\Support\Carbon::parse($schedule->starts_at)->format('H:i');
@@ -817,11 +817,11 @@
                     </div>
                     <div class="field">
                         <label>Sesi Belajar</label>
-                        <select name="class_session_id">
+                        <select name="session_occurrence_id">
                             <option value="">Tanpa sesi belajar</option>
                             @foreach ($sessions as $session)
-                                <option value="{{ $session->id }}" @selected((int) old('class_session_id') === $session->id)>
-                                    {{ $session->session_date->format('d M') }} | {{ $session->schoolClass->name }} | {{ $session->topic }}
+                                <option value="{{ $session->id }}" @selected((int) old('session_occurrence_id') === $session->id)>
+                                    {{ $session->occurs_on->format('d M') }} | {{ $session->schoolClass->name }} | {{ $session->legacy_topic }}
                                 </option>
                             @endforeach
                         </select>
@@ -885,15 +885,15 @@
                     @csrf
                 <div class="observation-context-grid">
                     <div class="field">
-                        <label for="class_session_id">Sesi Belajar</label>
-                        <select id="class_session_id" name="class_session_id" data-observation-session-select required>
+                        <label for="session_occurrence_id">Sesi Belajar</label>
+                        <select id="session_occurrence_id" name="session_occurrence_id" data-observation-session-select required>
                             @foreach ($sessions as $session)
                                 @php
                                     $start = \Illuminate\Support\Carbon::parse($session->starts_at)->format('H:i');
                                     $sessionStudentIds = $session->students->pluck('id')->implode(',');
                                 @endphp
                                 <option value="{{ $session->id }}" data-student-ids="{{ $sessionStudentIds }}" @selected((int) old('class_session_id') === $session->id)>
-                                    {{ $session->session_date->format('d M') }} | {{ $start }} | {{ $session->schoolClass->name }} | {{ $session->topic }}
+                                    {{ $session->occurs_on->format('d M') }} | {{ $start }} | {{ $session->schoolClass->name }} | {{ $session->legacy_topic }}
                                 </option>
                             @endforeach
                         </select>
