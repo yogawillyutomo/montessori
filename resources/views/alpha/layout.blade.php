@@ -197,7 +197,7 @@
     <div class="modal-body confirm-action-body">
         <div class="confirm-action-top">
             <div class="confirm-action-icon" aria-hidden="true">
-                <i data-lucide="circle-help"></i>
+                <i data-lucide="help-circle"></i>
             </div>
             <button class="icon-btn confirm-action-close" type="button" data-modal-close aria-label="Tutup">
                 <i data-lucide="x" class="nav-icon"></i>
