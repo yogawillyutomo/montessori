@@ -3,6 +3,7 @@
 namespace App\Services\Migration;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 
 class LegacyContractionAuditService
@@ -50,8 +51,8 @@ class LegacyContractionAuditService
                 'detail' => 'class_note and follow_up_recommendation still have no approved target-domain home; do not invent one during contraction.',
             ],
             'compatibility_read_model_retired' => [
-                'ready' => true,
-                'detail' => 'Current process UI reads SessionTemplate/SessionOccurrence directly; SchedulingReadModelService is no longer a live UI route dependency.',
+                'ready' => $this->canonicalUiRouteBindingsReady(),
+                'detail' => 'Current scheduling mutation routes must bind SessionTemplate/SessionOccurrence rather than WeeklySchedule/ClassSession compatibility identities.',
             ],
             'legacy_rollback_retired' => [
                 'ready' => false,
@@ -64,6 +65,30 @@ class LegacyContractionAuditService
     {
         foreach ($this->report() as $check) {
             if (! $check['ready']) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function canonicalUiRouteBindingsReady(): bool
+    {
+        $expected = [
+            'alpha.process.schedules.update' => ['sessionTemplate'],
+            'alpha.process.schedules.toggle' => ['sessionTemplate'],
+            'alpha.process.schedules.destroy' => ['sessionTemplate'],
+            'alpha.process.sessions.update' => ['sessionOccurrence'],
+            'alpha.process.sessions.note' => ['sessionOccurrence'],
+            'alpha.process.sessions.attendance' => ['sessionOccurrence'],
+            'alpha.process.sessions.close' => ['sessionOccurrence'],
+            'alpha.process.sessions.destroy' => ['sessionOccurrence'],
+        ];
+
+        foreach ($expected as $name => $parameters) {
+            $route = Route::getRoutes()->getByName($name);
+
+            if (! $route || $route->parameterNames() !== $parameters) {
                 return false;
             }
         }
