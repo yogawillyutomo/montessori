@@ -11,6 +11,110 @@ use Illuminate\Validation\ValidationException;
 class ScheduleWriteService
 {
     /**
+     * Canonical UI write path introduced in M17.5.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function createTarget(array $payload): SessionTemplate
+    {
+        return DB::transaction(function () use ($payload): SessionTemplate {
+            $studentIds = $this->studentIds($payload);
+            $this->assertValid($payload, $studentIds);
+
+            $template = SessionTemplate::query()->create($this->templatePayload($payload));
+            $this->syncLegacyScheduleMirror($template, $payload, $studentIds);
+
+            return $template->fresh(['schoolClass', 'teacher', 'students']);
+        });
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    public function updateTarget(SessionTemplate $template, array $payload): SessionTemplate
+    {
+        return DB::transaction(function () use ($template, $payload): SessionTemplate {
+            $template = SessionTemplate::query()->lockForUpdate()->findOrFail($template->id);
+            $studentIds = $this->studentIds($payload);
+
+            $this->assertValid($payload, $studentIds, $template);
+            $template->forceFill($this->templatePayload($payload, (bool) $template->is_active))->save();
+            $this->syncLegacyScheduleMirror($template, $payload, $studentIds);
+
+            return $template->fresh(['schoolClass', 'teacher', 'students']);
+        });
+    }
+
+    public function toggleTarget(SessionTemplate $template): SessionTemplate
+    {
+        return DB::transaction(function () use ($template): SessionTemplate {
+            $template = SessionTemplate::query()->lockForUpdate()->findOrFail($template->id);
+            $nextActive = ! $template->is_active;
+            $payload = $this->payloadFromTemplate($template);
+
+            if ($nextActive) {
+                $studentIds = RecurringSchedule::query()
+                    ->where('session_template_id', $template->id)
+                    ->whereNull('legacy_deleted_at')
+                    ->pluck('student_id')
+                    ->map(fn ($id): int => (int) $id)
+                    ->all();
+                $this->assertValid($payload, $studentIds, $template);
+            }
+
+            $template->forceFill(['is_active' => $nextActive])->save();
+            RecurringSchedule::query()
+                ->where('session_template_id', $template->id)
+                ->whereNull('legacy_deleted_at')
+                ->update(['is_active' => $nextActive, 'updated_at' => now()]);
+
+            $studentIds = RecurringSchedule::query()
+                ->where('session_template_id', $template->id)
+                ->whereNull('legacy_deleted_at')
+                ->pluck('student_id')
+                ->map(fn ($id): int => (int) $id)
+                ->all();
+            $this->syncLegacyScheduleMirror($template, $payload, $studentIds);
+
+            return $template->fresh(['schoolClass', 'teacher', 'students']);
+        });
+    }
+
+    public function deleteTarget(SessionTemplate $template): void
+    {
+        DB::transaction(function () use ($template): void {
+            $template = SessionTemplate::query()->lockForUpdate()->findOrFail($template->id);
+
+            if ($template->occurrences()->whereNull('legacy_deleted_at')->exists()) {
+                throw ValidationException::withMessages([
+                    'schedule' => 'Jadwal tidak bisa dihapus karena sudah pernah dibuat menjadi sesi belajar.',
+                ]);
+            }
+
+            RecurringSchedule::query()
+                ->where('session_template_id', $template->id)
+                ->update([
+                    'is_active' => false,
+                    'legacy_deleted_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            $template->forceFill([
+                'is_active' => false,
+                'legacy_deleted_at' => now(),
+            ])->save();
+
+            if ($template->legacy_weekly_schedule_id !== null) {
+                DB::table('student_weekly_schedule')
+                    ->where('weekly_schedule_id', $template->legacy_weekly_schedule_id)
+                    ->delete();
+                DB::table('weekly_schedules')
+                    ->where('id', $template->legacy_weekly_schedule_id)
+                    ->delete();
+            }
+        });
+    }
+
+    /**
      * @param  array<string, mixed>  $payload
      */
     public function create(array $payload): WeeklySchedule
@@ -321,6 +425,53 @@ class ScheduleWriteService
             'ends_at' => $payload['ends_at'],
             'topic' => $payload['topic'] ?? null,
             'is_active' => $isActive,
+        ];
+    }
+
+    /**
+     * Keep the legacy mirror alive during M17.5–M17.6 without requiring the UI
+     * or route layer to use the legacy row as its identity.
+     *
+     * @param  array<string, mixed>  $payload
+     * @param  array<int, int>  $studentIds
+     */
+    private function syncLegacyScheduleMirror(SessionTemplate $template, array $payload, array $studentIds): int
+    {
+        $legacyId = $template->legacy_weekly_schedule_id;
+        $now = now();
+        $legacyPayload = [
+            ...$this->legacyPayload($payload, (bool) $template->is_active),
+            'updated_at' => $now,
+        ];
+
+        if ($legacyId !== null && DB::table('weekly_schedules')->where('id', $legacyId)->exists()) {
+            DB::table('weekly_schedules')->where('id', $legacyId)->update($legacyPayload);
+        } else {
+            $legacyId = DB::table('weekly_schedules')->insertGetId([
+                ...$legacyPayload,
+                'created_at' => $now,
+            ]);
+            $template->forceFill(['legacy_weekly_schedule_id' => $legacyId])->save();
+        }
+
+        $this->replaceTargetMembership($template, $studentIds, (int) $legacyId);
+        $this->replaceLegacyMembership((int) $legacyId, $studentIds);
+
+        return (int) $legacyId;
+    }
+
+    /** @return array<string, mixed> */
+    private function payloadFromTemplate(SessionTemplate $template): array
+    {
+        return [
+            'school_class_id' => $template->legacy_school_class_id,
+            'teacher_id' => $template->legacy_teacher_id,
+            'room' => $template->room,
+            'capacity' => $template->capacity,
+            'day_of_week' => $template->day_of_week,
+            'starts_at' => $template->starts_at?->format('H:i'),
+            'ends_at' => $template->ends_at?->format('H:i'),
+            'topic' => $template->legacy_topic,
         ];
     }
 
