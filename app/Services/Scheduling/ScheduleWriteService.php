@@ -50,7 +50,7 @@ class ScheduleWriteService
         }
 
         return DB::transaction(function () use ($template, $payload): SessionTemplate {
-            $template = SessionTemplate::query()->lockForUpdate()->findOrFail($template->id);
+            $template = SessionTemplate::query()->whereNull('legacy_deleted_at')->lockForUpdate()->findOrFail($template->id);
             $studentIds = $this->studentIds($payload);
 
             $this->assertValid($payload, $studentIds, $template);
@@ -73,7 +73,7 @@ class ScheduleWriteService
         }
 
         return DB::transaction(function () use ($template): SessionTemplate {
-            $template = SessionTemplate::query()->lockForUpdate()->findOrFail($template->id);
+            $template = SessionTemplate::query()->whereNull('legacy_deleted_at')->lockForUpdate()->findOrFail($template->id);
             $nextActive = ! $template->is_active;
             $payload = $this->payloadFromTemplate($template);
 
@@ -114,7 +114,7 @@ class ScheduleWriteService
         }
 
         DB::transaction(function () use ($template): void {
-            $template = SessionTemplate::query()->lockForUpdate()->findOrFail($template->id);
+            $template = SessionTemplate::query()->whereNull('legacy_deleted_at')->lockForUpdate()->findOrFail($template->id);
 
             if ($template->occurrences()->whereNull('legacy_deleted_at')->exists()) {
                 throw ValidationException::withMessages([
