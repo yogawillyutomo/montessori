@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Models\SessionOccurrence;
 use App\Models\Report;
+use App\Models\SessionOccurrence;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\User;
@@ -207,7 +207,7 @@ class SecurityHardeningTest extends TestCase
         $session->loadMissing('students');
 
         return array_replace([
-            'school_class_id' => $session->school_class_id,
+            'school_class_id' => $session->legacy_school_class_id,
             'teacher_id' => $session->legacy_teacher_id,
             'room' => $session->room,
             'capacity' => max(1, (int) ($session->capacity ?: $session->students->count())),
