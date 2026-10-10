@@ -11,6 +11,7 @@ use App\Models\Observation;
 use App\Models\Report;
 use App\Models\SchoolClass;
 use App\Models\SessionOccurrence;
+use App\Models\SessionTemplate;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\Term;
@@ -334,9 +335,12 @@ class ExampleTest extends TestCase
         $this->signIn();
 
         $schedule = WeeklySchedule::query()->with('students')->where('day_of_week', 1)->firstOrFail();
+        $template = SessionTemplate::query()
+            ->where('legacy_weekly_schedule_id', $schedule->id)
+            ->firstOrFail();
 
         $this->from('/process/attendance')->post(route('alpha.sessions.create-from-schedule'), [
-            'weekly_schedule_id' => $schedule->id,
+            'session_template_id' => $template->id,
             'session_date' => '2026-06-08',
         ])->assertRedirect('/process/attendance')
             ->assertSessionDoesntHaveErrors();
@@ -364,7 +368,7 @@ class ExampleTest extends TestCase
 
         $this->assertSame($session->students()->count(), $session->attendances()->where('status', 'present')->whereNotNull('marked_at')->count());
 
-        $this->patch(route('alpha.process.sessions.attendance', $session), [
+        $this->patch(route('alpha.process.sessions.attendance', $occurrence), [
             'attendance_action' => 'reset',
             'attendance' => $payload,
         ])->assertRedirect()
