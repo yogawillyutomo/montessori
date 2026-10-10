@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
@@ -47,6 +48,24 @@ class SessionTemplate extends Model
     public function environment(): BelongsTo
     {
         return $this->belongsTo(Environment::class);
+    }
+
+    public function schoolClass(): BelongsTo
+    {
+        return $this->belongsTo(SchoolClass::class, 'legacy_school_class_id');
+    }
+
+    public function teacher(): BelongsTo
+    {
+        return $this->belongsTo(Teacher::class, 'legacy_teacher_id');
+    }
+
+    public function students(): BelongsToMany
+    {
+        return $this->belongsToMany(Student::class, 'recurring_schedules', 'session_template_id', 'student_id')
+            ->wherePivot('is_active', true)
+            ->wherePivotNull('legacy_deleted_at')
+            ->withPivot(['id', 'day_of_week', 'valid_from', 'valid_until']);
     }
 
     public function legacyWeeklySchedule(): BelongsTo
