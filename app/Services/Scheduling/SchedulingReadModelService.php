@@ -140,6 +140,7 @@ class SchedulingReadModelService
             $legacy->setRelation('schoolClass', $schoolClass);
             $legacy->setRelation('teacher', $teacher);
             $legacy->setRelation('students', new EloquentCollection($students->all()));
+            $legacy->setAttribute('observations_count', $occurrence->observations_count);
 
             return $legacy;
         })->values();
@@ -153,6 +154,7 @@ class SchedulingReadModelService
     {
         $occurrences = SessionOccurrence::query()
             ->with(['bookings.student.guardian', 'bookings.student.schoolClass.classLevel'])
+            ->withCount('observations')
             ->whereNotNull('legacy_class_session_id')
             ->whereNull('legacy_deleted_at')
             ->whereIn('legacy_school_class_id', $classIds)
@@ -168,7 +170,6 @@ class SchedulingReadModelService
 
         $legacyRows = ClassSession::query()
             ->with(['attendances.student'])
-            ->withCount('observations')
             ->whereIn('id', $occurrences->pluck('legacy_class_session_id')->filter())
             ->get()
             ->keyBy('id');
