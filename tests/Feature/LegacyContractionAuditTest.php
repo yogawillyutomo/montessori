@@ -28,7 +28,7 @@ class LegacyContractionAuditTest extends TestCase
         $this->assertFalse($report['observation_legacy_fk_retired']['ready']);
         $this->assertFalse($report['attendance_legacy_fk_retired']['ready']);
         $this->assertFalse($report['session_notes_target_home']['ready']);
-        $this->assertFalse($report['compatibility_read_model_retired']['ready']);
+        $this->assertTrue($report['compatibility_read_model_retired']['ready']);
         $this->assertFalse($report['legacy_rollback_retired']['ready']);
         $this->assertFalse($audit->deletionReady());
 
