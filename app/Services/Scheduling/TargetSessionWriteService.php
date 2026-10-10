@@ -24,10 +24,8 @@ class TargetSessionWriteService
     ) {}
 
     /** @return array<int, int> */
-    public function participantIds(ClassSession $session): array
+    public function participantIdsForOccurrence(SessionOccurrence $occurrence): array
     {
-        $occurrence = $this->resolveOccurrence($session);
-
         return ChildSessionBooking::query()
             ->where('session_occurrence_id', $occurrence->id)
             ->whereIn('status', ChildSessionBooking::ACTIVE_STATUSES)
@@ -37,24 +35,22 @@ class TargetSessionWriteService
     }
 
     /** @return array{teacher_id: ?int, school_class_id: ?int} */
-    public function ownership(ClassSession $session): array
+    public function ownershipForOccurrence(SessionOccurrence $occurrence): array
     {
-        $occurrence = $this->resolveOccurrence($session);
-
         return [
             'teacher_id' => $occurrence->legacy_teacher_id === null ? null : (int) $occurrence->legacy_teacher_id,
             'school_class_id' => $occurrence->legacy_school_class_id === null ? null : (int) $occurrence->legacy_school_class_id,
         ];
     }
 
-    public function createFromSchedule(WeeklySchedule $schedule, string $date, ?User $actor): ClassSession
+    public function createFromTemplate(SessionTemplate $template, string $date, ?User $actor): SessionOccurrence
     {
-        return DB::transaction(function () use ($schedule, $date, $actor): ClassSession {
-            $sessionDate = Carbon::parse($date);
+        return DB::transaction(function () use ($template, $date, $actor): SessionOccurrence {
             $template = SessionTemplate::query()
-                ->where('legacy_weekly_schedule_id', $schedule->id)
                 ->whereNull('legacy_deleted_at')
-                ->firstOrFail();
+                ->lockForUpdate()
+                ->findOrFail($template->id);
+            $sessionDate = Carbon::parse($date);
 
             if (! $template->is_active || (int) $sessionDate->dayOfWeekIso !== (int) $template->day_of_week) {
                 throw ValidationException::withMessages([
@@ -74,16 +70,21 @@ class TargetSessionWriteService
                 ->whereDate('occurs_on', $sessionDate->toDateString())
                 ->whereNull('legacy_deleted_at')
                 ->first();
+
             if ($existing) {
-                return $this->compatibilityHandle($existing);
+                $this->compatibility->syncOccurrence($existing);
+
+                return $existing;
             }
 
             $payload = $this->templateOccurrencePayload($template, $sessionDate->toDateString());
             $this->validator->validateTime($payload);
             $occurrence = SessionOccurrence::query()->create($payload);
-            $legacyId = $this->compatibility->syncOccurrence($occurrence);
-            if ($legacyId === null) {
-                throw ValidationException::withMessages(['session' => 'Compatibility session tidak dapat dibentuk dari occurrence target.']);
+
+            if ($this->compatibility->syncOccurrence($occurrence) === null) {
+                throw ValidationException::withMessages([
+                    'session' => 'Compatibility session tidak dapat dibentuk dari occurrence target.',
+                ]);
             }
 
             $recurring = RecurringSchedule::query()
@@ -113,8 +114,218 @@ class TargetSessionWriteService
                 $this->compatibility->ensureUnmarkedAttendance($booking);
             }
 
-            return ClassSession::query()->findOrFail($legacyId);
+            return $occurrence->fresh();
         });
+    }
+
+    /** @param array<string, mixed> $attributes @param array<int, int> $studentIds */
+    public function updateOccurrence(
+        SessionOccurrence $occurrence,
+        array $attributes,
+        array $studentIds,
+        ?User $actor,
+    ): SessionOccurrence {
+        return DB::transaction(function () use ($occurrence, $attributes, $studentIds, $actor): SessionOccurrence {
+            $occurrence = SessionOccurrence::query()
+                ->whereNull('legacy_deleted_at')
+                ->lockForUpdate()
+                ->findOrFail($occurrence->id);
+
+            if ($occurrence->status !== 'planned') {
+                throw ValidationException::withMessages([
+                    'status' => 'Structural session update hanya boleh dilakukan saat occurrence masih planned.',
+                ]);
+            }
+            if (($attributes['status'] ?? 'planned') === 'cancelled') {
+                throw ValidationException::withMessages([
+                    'status' => 'Gunakan workflow session cancellation agar credit, makeup, dan audit tetap konsisten.',
+                ]);
+            }
+
+            $studentIds = collect($studentIds)->map(fn ($id): int => (int) $id)->unique()->values()->all();
+            $payload = [
+                'occurs_on' => Carbon::parse($attributes['session_date'])->toDateString(),
+                'starts_at' => $attributes['starts_at'],
+                'ends_at' => $attributes['ends_at'],
+                'capacity' => (int) $attributes['capacity'],
+                'room' => $this->validator->normalizeRoom($attributes['room'] ?? null),
+                'legacy_school_class_id' => (int) $attributes['school_class_id'],
+                'legacy_teacher_id' => (int) $attributes['teacher_id'],
+                'legacy_topic' => $attributes['topic'] ?? null,
+                'status' => 'planned',
+            ];
+
+            $this->validator->validateTime($payload, $occurrence);
+            $this->validator->validateStudents($payload, $studentIds, $occurrence);
+            $occurrence->forceFill($payload)->save();
+            $this->compatibility->syncOccurrence($occurrence);
+            $this->syncParticipants($occurrence, $studentIds, $actor);
+
+            return $occurrence->fresh();
+        });
+    }
+
+    /** @param array{class_note?: ?string, follow_up_recommendation?: ?string} $notes */
+    public function updateOccurrenceNotes(SessionOccurrence $occurrence, array $notes): void
+    {
+        $occurrence = SessionOccurrence::query()
+            ->whereNull('legacy_deleted_at')
+            ->findOrFail($occurrence->id);
+        $legacyId = $this->compatibility->syncOccurrence($occurrence);
+
+        if ($legacyId === null) {
+            throw ValidationException::withMessages([
+                'session' => 'Compatibility session untuk catatan sesi tidak dapat dibentuk.',
+            ]);
+        }
+
+        $this->compatibility->updateCompatibilityNotes($legacyId, $notes);
+    }
+
+    /** @param array{class_note?: ?string, follow_up_recommendation?: ?string} $notes */
+    public function closeOccurrence(SessionOccurrence $occurrence, array $notes, ?User $actor): int
+    {
+        return DB::transaction(function () use ($occurrence, $notes, $actor): int {
+            $occurrence = SessionOccurrence::query()
+                ->whereNull('legacy_deleted_at')
+                ->lockForUpdate()
+                ->findOrFail($occurrence->id);
+
+            if ($occurrence->status === 'cancelled') {
+                throw ValidationException::withMessages([
+                    'session' => 'Session occurrence yang cancelled tidak dapat ditutup sebagai completed.',
+                ]);
+            }
+
+            $bookings = ChildSessionBooking::query()
+                ->where('session_occurrence_id', $occurrence->id)
+                ->whereIn('status', ChildSessionBooking::ACTIVE_STATUSES)
+                ->get();
+            $unmarked = $bookings->filter(
+                fn (ChildSessionBooking $booking): bool => $this->evidence->attendanceFor($booking)?->marked_at === null,
+            )->count();
+
+            if ($occurrence->status !== 'completed') {
+                $occurrence->forceFill([
+                    'status' => 'completed',
+                    'completed_at' => now(),
+                    'completed_by' => $actor?->id,
+                ])->save();
+            }
+
+            $this->compatibility->syncOccurrence($occurrence);
+            $this->updateOccurrenceNotes($occurrence, $notes);
+
+            return $unmarked;
+        });
+    }
+
+    public function destroyOccurrence(SessionOccurrence $occurrence, ?User $actor): void
+    {
+        DB::transaction(function () use ($occurrence, $actor): void {
+            $occurrence = SessionOccurrence::query()
+                ->whereNull('legacy_deleted_at')
+                ->lockForUpdate()
+                ->findOrFail($occurrence->id);
+
+            if ($occurrence->status !== 'planned') {
+                throw ValidationException::withMessages([
+                    'session' => 'Hanya planned session tanpa evidence yang boleh dihapus.',
+                ]);
+            }
+
+            $legacyId = $occurrence->legacy_class_session_id;
+            $hasObservation = Observation::query()
+                ->where('session_occurrence_id', $occurrence->id)
+                ->when(
+                    $legacyId !== null,
+                    fn ($query) => $query->orWhere('class_session_id', $legacyId),
+                )
+                ->exists();
+
+            if ($hasObservation || $occurrence->presentations()->exists()) {
+                throw ValidationException::withMessages([
+                    'session' => 'Session yang sudah memiliki evidence pedagogis tidak boleh dihapus.',
+                ]);
+            }
+
+            $bookings = ChildSessionBooking::query()
+                ->where('session_occurrence_id', $occurrence->id)
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($bookings as $booking) {
+                $hasMovement = BookingMovement::query()
+                    ->where('source_booking_id', $booking->id)
+                    ->orWhere('destination_booking_id', $booking->id)
+                    ->exists();
+
+                if ($booking->status !== 'scheduled'
+                    || $booking->session_credit_id !== null
+                    || $this->evidence->hasAnyMarkedAttendance($booking)
+                    || $hasMovement) {
+                    throw ValidationException::withMessages([
+                        'session' => 'Session memiliki booking history, credit, movement, atau attendance evidence. Gunakan workflow cancellation, bukan delete.',
+                    ]);
+                }
+            }
+
+            foreach ($bookings as $booking) {
+                $booking->forceFill([
+                    'status' => 'cancelled',
+                    'active_on' => null,
+                    'cancellation_reason' => 'Administrative removal of pristine planned session.',
+                    'cancelled_by' => $actor?->id,
+                    'cancelled_at' => now(),
+                    'legacy_deleted_at' => now(),
+                ])->save();
+                $this->compatibility->removeBookingMirror($booking);
+            }
+
+            $occurrence->forceFill([
+                'status' => 'cancelled',
+                'cancellation_reason' => 'Administrative removal of pristine planned session.',
+                'cancelled_by' => $actor?->id,
+                'cancelled_at' => now(),
+                'legacy_deleted_at' => now(),
+            ])->save();
+            $this->compatibility->deleteOccurrenceMirror($occurrence);
+        });
+    }
+
+    /** @return array<int, int> */
+    public function participantIds(ClassSession $session): array
+    {
+        $occurrence = $this->resolveOccurrence($session);
+
+        return ChildSessionBooking::query()
+            ->where('session_occurrence_id', $occurrence->id)
+            ->whereIn('status', ChildSessionBooking::ACTIVE_STATUSES)
+            ->pluck('student_id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+    }
+
+    /** @return array{teacher_id: ?int, school_class_id: ?int} */
+    public function ownership(ClassSession $session): array
+    {
+        $occurrence = $this->resolveOccurrence($session);
+
+        return [
+            'teacher_id' => $occurrence->legacy_teacher_id === null ? null : (int) $occurrence->legacy_teacher_id,
+            'school_class_id' => $occurrence->legacy_school_class_id === null ? null : (int) $occurrence->legacy_school_class_id,
+        ];
+    }
+
+    public function createFromSchedule(WeeklySchedule $schedule, string $date, ?User $actor): ClassSession
+    {
+        $template = SessionTemplate::query()
+            ->where('legacy_weekly_schedule_id', $schedule->id)
+            ->whereNull('legacy_deleted_at')
+            ->firstOrFail();
+        $occurrence = $this->createFromTemplate($template, $date, $actor);
+
+        return $this->compatibilityHandle($occurrence);
     }
 
     /** @param array<string, mixed> $attributes @param array<int, int> $studentIds */

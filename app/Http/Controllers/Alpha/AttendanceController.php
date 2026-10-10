@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Alpha;
 
 use App\Http\Controllers\Controller;
 use App\Models\ChildSessionBooking;
-use App\Models\ClassSession;
+use App\Models\SessionOccurrence;
 use App\Services\Alpha\AccessScopeService;
 use App\Services\Entitlement\AttendanceOutcomeService;
 use App\Services\Scheduling\SessionWriteService;
@@ -16,10 +16,10 @@ use Illuminate\Validation\ValidationException;
 
 class AttendanceController extends Controller
 {
-    public function update(Request $request, ClassSession $classSession): RedirectResponse
+    public function update(Request $request, SessionOccurrence $sessionOccurrence): RedirectResponse
     {
         $sessionWrites = app(SessionWriteService::class);
-        $this->authorizeTeacherSession($request, $classSession, $sessionWrites);
+        $this->authorizeTeacherOccurrence($request, $sessionOccurrence, $sessionWrites);
 
         $validated = $request->validate([
             'attendance' => ['required', 'array'],
@@ -28,7 +28,7 @@ class AttendanceController extends Controller
             'attendance_action' => ['nullable', 'in:save,all_present,reset'],
         ]);
 
-        $sessionStudentIds = $sessionWrites->participantIds($classSession);
+        $sessionStudentIds = $sessionWrites->participantIdsForOccurrence($sessionOccurrence);
         $action = $validated['attendance_action'] ?? 'save';
 
         foreach (array_keys($validated['attendance']) as $studentId) {
@@ -57,12 +57,12 @@ class AttendanceController extends Controller
         $actor = $request->user();
         abort_if(! $actor, 403);
 
-        DB::transaction(function () use ($rows, $classSession, $actor): void {
+        DB::transaction(function () use ($rows, $sessionOccurrence, $actor): void {
             $outcomes = app(AttendanceOutcomeService::class);
 
             foreach ($rows as $studentId => $row) {
                 $booking = ChildSessionBooking::query()
-                    ->where('legacy_class_session_id', $classSession->id)
+                    ->where('session_occurrence_id', $sessionOccurrence->id)
                     ->where('student_id', (int) $studentId)
                     ->whereIn('status', ChildSessionBooking::ACTIVE_STATUSES)
                     ->first();
@@ -85,9 +85,9 @@ class AttendanceController extends Controller
         return back()->with('status', 'Presensi berhasil diperbarui.');
     }
 
-    private function authorizeTeacherSession(
+    private function authorizeTeacherOccurrence(
         Request $request,
-        ClassSession $classSession,
+        SessionOccurrence $sessionOccurrence,
         SessionWriteService $sessionWrites,
     ): void {
         $user = $request->user();
@@ -100,7 +100,7 @@ class AttendanceController extends Controller
         $teacher = app(AccessScopeService::class)->teacherFor($user);
         abort_if(! $teacher, 403);
 
-        $ownership = $sessionWrites->ownership($classSession);
+        $ownership = $sessionWrites->ownershipForOccurrence($sessionOccurrence);
         abort_if($ownership['teacher_id'] === null || $ownership['teacher_id'] !== (int) $teacher->id, 403);
     }
 }

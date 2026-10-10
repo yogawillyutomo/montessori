@@ -6,7 +6,9 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 #[Fillable([
     'session_template_id',
@@ -75,6 +77,36 @@ class SessionOccurrence extends Model
         return $this->belongsTo(User::class, 'cancelled_by');
     }
 
+    public function schoolClass(): BelongsTo
+    {
+        return $this->belongsTo(SchoolClass::class, 'legacy_school_class_id');
+    }
+
+    public function teacher(): BelongsTo
+    {
+        return $this->belongsTo(Teacher::class, 'legacy_teacher_id');
+    }
+
+    public function students(): BelongsToMany
+    {
+        return $this->belongsToMany(Student::class, 'child_session_bookings', 'session_occurrence_id', 'student_id')
+            ->wherePivotIn('status', ['scheduled', 'session_cancelled'])
+            ->wherePivotNull('legacy_deleted_at')
+            ->withPivot(['id', 'status', 'active_on']);
+    }
+
+    public function attendances(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            Attendance::class,
+            ChildSessionBooking::class,
+            'session_occurrence_id',
+            'child_session_booking_id',
+            'id',
+            'id',
+        );
+    }
+
     public function legacyClassSession(): BelongsTo
     {
         return $this->belongsTo(ClassSession::class, 'legacy_class_session_id');
@@ -100,6 +132,25 @@ class SessionOccurrence extends Model
     public function observations(): HasMany
     {
         return $this->hasMany(Observation::class);
+    }
+
+    /** @return array<string, int> */
+    public function attendanceRecap(): array
+    {
+        $attendances = $this->attendances;
+        $studentCount = $this->students->count();
+        $unmarkedCount = $attendances->where('status', 'unmarked')->count();
+        $missingRows = max(0, $studentCount - $attendances->count());
+
+        return [
+            'total' => $studentCount,
+            'present' => $attendances->where('status', 'present')->count(),
+            'excused' => $attendances->where('status', 'excused')->count(),
+            'sick' => $attendances->where('status', 'sick')->count(),
+            'absent' => $attendances->where('status', 'absent')->count(),
+            'late' => $attendances->where('status', 'late')->count(),
+            'unmarked' => $unmarkedCount + $missingRows,
+        ];
     }
 
     public function activeBookingCount(): int

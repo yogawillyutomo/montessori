@@ -84,9 +84,9 @@ Route::middleware('auth')->group(function (): void {
         Route::patch('/master/indicators/{indicator}/toggle', [CurriculumController::class, 'toggleIndicator'])->name('alpha.master.indicators.toggle');
         Route::delete('/master/indicators/{indicator}', [CurriculumController::class, 'destroyIndicator'])->name('alpha.master.indicators.destroy');
         Route::post('/process/schedules', [WeeklyScheduleController::class, 'store'])->name('alpha.process.schedules.store');
-        Route::patch('/process/schedules/{weeklySchedule}', [WeeklyScheduleController::class, 'update'])->name('alpha.process.schedules.update');
-        Route::patch('/process/schedules/{weeklySchedule}/toggle', [WeeklyScheduleController::class, 'toggle'])->name('alpha.process.schedules.toggle');
-        Route::delete('/process/schedules/{weeklySchedule}', [WeeklyScheduleController::class, 'destroy'])->name('alpha.process.schedules.destroy');
+        Route::patch('/process/schedules/{sessionTemplate}', [WeeklyScheduleController::class, 'update'])->name('alpha.process.schedules.update');
+        Route::patch('/process/schedules/{sessionTemplate}/toggle', [WeeklyScheduleController::class, 'toggle'])->name('alpha.process.schedules.toggle');
+        Route::delete('/process/schedules/{sessionTemplate}', [WeeklyScheduleController::class, 'destroy'])->name('alpha.process.schedules.destroy');
     });
 
     Route::middleware('role:super_admin,admin,teacher,principal')->group(function (): void {
@@ -101,15 +101,15 @@ Route::middleware('auth')->group(function (): void {
 
     Route::middleware('role:super_admin,admin,teacher')->group(function (): void {
         Route::post('/sessions/from-schedule', [SessionController::class, 'createFromSchedule'])->name('alpha.sessions.create-from-schedule');
-        Route::patch('/process/sessions/{classSession}', [SessionController::class, 'update'])
+        Route::patch('/process/sessions/{sessionOccurrence}', [SessionController::class, 'update'])
             ->middleware(EnsureTeacherSessionMutationScope::class)
             ->name('alpha.process.sessions.update');
-        Route::patch('/process/sessions/{classSession}/note', [SessionController::class, 'updateNote'])->name('alpha.process.sessions.note');
-        Route::patch('/process/sessions/{classSession}/attendance', [AttendanceController::class, 'update'])
+        Route::patch('/process/sessions/{sessionOccurrence}/note', [SessionController::class, 'updateNote'])->name('alpha.process.sessions.note');
+        Route::patch('/process/sessions/{sessionOccurrence}/attendance', [AttendanceController::class, 'update'])
             ->middleware(EnsureTeacherSessionMutationScope::class)
             ->name('alpha.process.sessions.attendance');
-        Route::patch('/process/sessions/{classSession}/close', [SessionController::class, 'close'])->name('alpha.process.sessions.close');
-        Route::delete('/process/sessions/{classSession}', [SessionController::class, 'destroy'])->name('alpha.process.sessions.destroy');
+        Route::patch('/process/sessions/{sessionOccurrence}/close', [SessionController::class, 'close'])->name('alpha.process.sessions.close');
+        Route::delete('/process/sessions/{sessionOccurrence}', [SessionController::class, 'destroy'])->name('alpha.process.sessions.destroy');
         Route::post('/presentations', [PresentationController::class, 'store'])->name('alpha.presentations.store');
         Route::post('/development-progress', [DevelopmentProgressController::class, 'store'])->name('alpha.development-progress.store');
         Route::post('/observations', [ObservationController::class, 'store'])->name('alpha.observations.store');

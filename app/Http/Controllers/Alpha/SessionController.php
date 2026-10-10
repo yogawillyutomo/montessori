@@ -4,9 +4,9 @@ namespace App\Http\Controllers\Alpha;
 
 use App\Http\Controllers\Alpha\Concerns\ProvidesAlphaShell;
 use App\Http\Controllers\Controller;
-use App\Models\ClassSession;
 use App\Models\SchoolClass;
-use App\Models\WeeklySchedule;
+use App\Models\SessionOccurrence;
+use App\Models\SessionTemplate;
 use App\Services\Alpha\AccessScopeService;
 use App\Services\Scheduling\SessionWriteService;
 use App\Support\Alpha\Role;
@@ -24,29 +24,37 @@ class SessionController extends Controller
     public function createFromSchedule(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'weekly_schedule_id' => ['required', 'exists:weekly_schedules,id'],
+            'session_template_id' => ['nullable', 'required_without:weekly_schedule_id', 'exists:session_templates,id'],
+            'weekly_schedule_id' => ['nullable', 'required_without:session_template_id', 'exists:weekly_schedules,id'],
             'session_date' => ['required', 'date'],
         ]);
 
-        $schedule = WeeklySchedule::query()->findOrFail($validated['weekly_schedule_id']);
-        $this->authorizeTeacherSchedule($request, $schedule);
-        $this->sessionWrites->createFromSchedule($schedule, $validated['session_date'], $request->user());
+        $template = SessionTemplate::query()
+            ->whereNull('legacy_deleted_at')
+            ->when(
+                $validated['session_template_id'] ?? null,
+                fn ($query) => $query->whereKey((int) $validated['session_template_id']),
+                fn ($query) => $query->where('legacy_weekly_schedule_id', (int) $validated['weekly_schedule_id']),
+            )
+            ->firstOrFail();
+        $this->authorizeTeacherTemplate($request, $template);
+        $this->sessionWrites->createFromTemplate($template, $validated['session_date'], $request->user());
 
         return back()->with('status', 'Sesi belajar berhasil dibuat dari jadwal mingguan. Presensi bisa diisi kapan saja.');
     }
 
-    public function update(Request $request, ClassSession $classSession): RedirectResponse
+    public function update(Request $request, SessionOccurrence $sessionOccurrence): RedirectResponse
     {
-        $this->authorizeTeacherSession($request, $classSession);
+        $this->authorizeTeacherOccurrence($request, $sessionOccurrence);
         $validated = $this->sessionRules($request);
         $validated['room'] = $this->normalizeRoom($validated['room'] ?? null);
         $validated['capacity'] = $this->resolveCapacity($validated['capacity'] ?? null, (int) $validated['school_class_id']);
         $studentIds = $request->boolean('student_ids_present')
             ? $this->selectedStudentIds($validated)
-            : $this->sessionWrites->participantIds($classSession);
+            : $this->sessionWrites->participantIdsForOccurrence($sessionOccurrence);
 
-        $this->sessionWrites->update(
-            $classSession,
+        $this->sessionWrites->updateOccurrence(
+            $sessionOccurrence,
             collect($validated)->except(['student_ids', 'student_ids_present'])->all(),
             $studentIds,
             $request->user(),
@@ -55,28 +63,28 @@ class SessionController extends Controller
         return back()->with('status', 'Sesi belajar berhasil diperbarui.');
     }
 
-    public function updateNote(Request $request, ClassSession $classSession): RedirectResponse
+    public function updateNote(Request $request, SessionOccurrence $sessionOccurrence): RedirectResponse
     {
-        $this->authorizeTeacherSession($request, $classSession);
+        $this->authorizeTeacherOccurrence($request, $sessionOccurrence);
         $validated = $request->validate([
             'class_note' => ['nullable', 'string', 'max:3000'],
             'follow_up_recommendation' => ['nullable', 'string', 'max:3000'],
         ]);
 
-        $this->sessionWrites->updateNotes($classSession, $validated);
+        $this->sessionWrites->updateOccurrenceNotes($sessionOccurrence, $validated);
 
         return back()->with('status', 'Catatan kelas berhasil disimpan.');
     }
 
-    public function close(Request $request, ClassSession $classSession): RedirectResponse
+    public function close(Request $request, SessionOccurrence $sessionOccurrence): RedirectResponse
     {
-        $this->authorizeTeacherSession($request, $classSession);
+        $this->authorizeTeacherOccurrence($request, $sessionOccurrence);
         $validated = $request->validate([
             'class_note' => ['nullable', 'string', 'max:3000'],
             'follow_up_recommendation' => ['nullable', 'string', 'max:3000'],
         ]);
 
-        $unmarked = $this->sessionWrites->close($classSession, $validated, $request->user());
+        $unmarked = $this->sessionWrites->closeOccurrence($sessionOccurrence, $validated, $request->user());
         $warning = $unmarked > 0
             ? " Sesi ditutup dengan {$unmarked} siswa belum ditandai presensinya."
             : '';
@@ -84,10 +92,10 @@ class SessionController extends Controller
         return back()->with('status', 'Sesi belajar berhasil ditutup.'.$warning);
     }
 
-    public function destroy(Request $request, ClassSession $classSession): RedirectResponse
+    public function destroy(Request $request, SessionOccurrence $sessionOccurrence): RedirectResponse
     {
-        $this->authorizeTeacherSession($request, $classSession);
-        $this->sessionWrites->destroy($classSession, $request->user());
+        $this->authorizeTeacherOccurrence($request, $sessionOccurrence);
+        $this->sessionWrites->destroyOccurrence($sessionOccurrence, $request->user());
 
         return back()->with('status', 'Sesi belajar berhasil dihapus.');
     }
@@ -111,7 +119,7 @@ class SessionController extends Controller
         ]);
     }
 
-    private function authorizeTeacherSchedule(Request $request, WeeklySchedule $schedule): void
+    private function authorizeTeacherTemplate(Request $request, SessionTemplate $sessionTemplate): void
     {
         $user = $request->user();
         abort_if(! $user, 403);
@@ -123,11 +131,11 @@ class SessionController extends Controller
         $teacher = app(AccessScopeService::class)->teacherFor($user);
         abort_if(! $teacher, 403);
 
-        $ownership = $this->sessionWrites->scheduleOwnership($schedule);
+        $ownership = $this->sessionWrites->scheduleOwnershipForTemplate($sessionTemplate);
         abort_if($ownership['teacher_id'] === null || $ownership['teacher_id'] !== (int) $teacher->id, 403);
     }
 
-    private function authorizeTeacherSession(Request $request, ClassSession $classSession): void
+    private function authorizeTeacherOccurrence(Request $request, SessionOccurrence $sessionOccurrence): void
     {
         $user = $request->user();
         abort_if(! $user, 403);
@@ -139,7 +147,7 @@ class SessionController extends Controller
         $teacher = app(AccessScopeService::class)->teacherFor($user);
         abort_if(! $teacher, 403);
 
-        $ownership = $this->sessionWrites->ownership($classSession);
+        $ownership = $this->sessionWrites->ownershipForOccurrence($sessionOccurrence);
         abort_if($ownership['teacher_id'] === null || $ownership['teacher_id'] !== (int) $teacher->id, 403);
     }
 

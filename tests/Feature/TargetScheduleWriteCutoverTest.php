@@ -87,7 +87,7 @@ class TargetScheduleWriteCutoverTest extends TestCase
         ]);
 
         $this->actingAs($admin)
-            ->patch(route('alpha.process.schedules.update', $legacy), [
+            ->patch(route('alpha.process.schedules.update', $template), [
                 'school_class_id' => $template->legacy_school_class_id,
                 'teacher_id' => $template->legacy_teacher_id,
                 'room' => 'Canonical Target Room',
@@ -199,7 +199,7 @@ class TargetScheduleWriteCutoverTest extends TestCase
         $legacy = WeeklySchedule::query()->findOrFail($legacyId);
 
         $this->actingAs($admin)
-            ->delete(route('alpha.process.schedules.destroy', $legacy))
+            ->delete(route('alpha.process.schedules.destroy', $template))
             ->assertRedirect();
 
         $this->assertDatabaseMissing('weekly_schedules', ['id' => $legacyId]);

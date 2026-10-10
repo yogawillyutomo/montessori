@@ -9,10 +9,11 @@ use App\Models\IlpPlan;
 use App\Models\Indicator;
 use App\Models\Observation;
 use App\Models\SchoolClass;
+use App\Models\SessionOccurrence;
+use App\Models\SessionTemplate;
 use App\Models\Student;
 use App\Models\Teacher;
 use App\Services\Alpha\AccessScopeService;
-use App\Services\Scheduling\SchedulingReadModelService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -43,14 +44,42 @@ class ProcessPageController extends Controller
     private function processView(Request $request, string $processSection, string $activeMenu): View
     {
         $scope = app(AccessScopeService::class);
-        $scheduling = app(SchedulingReadModelService::class);
         $user = $request->user();
         $studentIds = $user ? $scope->accessibleStudentIds($user) : [];
         $classIds = $user ? $scope->accessibleClassIds($user) : [];
         $teacher = $user ? $scope->teacherFor($user) : null;
         $selectedSessionDate = $request->date('date')?->toDateString() ?? now()->toDateString();
-        $schedules = $scheduling->schedules($classIds, $teacher);
-        $sessions = $scheduling->sessions($classIds, $teacher);
+        $schedules = SessionTemplate::query()
+            ->with([
+                'schoolClass.classLevel',
+                'teacher',
+                'students.guardian',
+                'students.schoolClass.classLevel',
+            ])
+            ->whereNull('legacy_deleted_at')
+            ->whereIn('legacy_school_class_id', $classIds)
+            ->when($teacher, fn ($query) => $query->where('legacy_teacher_id', $teacher->id))
+            ->orderBy('day_of_week')
+            ->orderBy('starts_at')
+            ->get();
+
+        $sessions = SessionOccurrence::query()
+            ->with([
+                'schoolClass.classLevel',
+                'teacher',
+                'students.guardian',
+                'students.schoolClass.classLevel',
+                'attendances.student',
+                'legacyClassSession',
+            ])
+            ->withCount('observations')
+            ->whereNull('legacy_deleted_at')
+            ->whereIn('legacy_school_class_id', $classIds)
+            ->when($teacher, fn ($query) => $query->where('legacy_teacher_id', $teacher->id))
+            ->orderByDesc('occurs_on')
+            ->orderBy('starts_at')
+            ->limit(80)
+            ->get();
         $indicators = Indicator::query()
             ->with('developmentArea')
             ->where('is_active', true)
@@ -62,11 +91,11 @@ class ProcessPageController extends Controller
             })
             ->values();
         $monitoringSnapshots = Observation::query()
-            ->whereIn('class_session_id', $sessions->pluck('id'))
+            ->whereIn('session_occurrence_id', $sessions->pluck('id'))
             ->whereIn('indicator_id', $indicators->pluck('id'))
             ->get()
             ->groupBy(fn (Observation $observation): string => implode('|', [
-                $observation->class_session_id,
+                $observation->session_occurrence_id,
                 $observation->student_id,
                 $observation->observed_on->toDateString(),
             ]))
@@ -90,7 +119,7 @@ class ProcessPageController extends Controller
             'sessions' => $sessions,
             'selectedSessionDate' => $selectedSessionDate,
             'observations' => Observation::query()
-                ->with(['student.schoolClass', 'developmentArea', 'indicator.developmentArea', 'teacher', 'classSession'])
+                ->with(['student.schoolClass', 'developmentArea', 'indicator.developmentArea', 'teacher', 'sessionOccurrence.schoolClass'])
                 ->whereIn('student_id', $studentIds)
                 ->where('status', '!=', 'archived')
                 ->orderByDesc('observed_on')

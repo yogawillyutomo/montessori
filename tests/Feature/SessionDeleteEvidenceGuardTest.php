@@ -8,7 +8,6 @@ use App\Models\SessionOccurrence;
 use App\Models\SessionTemplate;
 use App\Models\Student;
 use App\Models\User;
-use App\Models\WeeklySchedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -22,7 +21,7 @@ class SessionDeleteEvidenceGuardTest extends TestCase
         $this->seed();
         config()->set('montessori.session.write_source', 'target');
 
-        $schedule = WeeklySchedule::query()
+        $template = SessionTemplate::query()
             ->where('day_of_week', 1)
             ->where('room', 'Ruang Sunny')
             ->firstOrFail();
@@ -30,14 +29,11 @@ class SessionDeleteEvidenceGuardTest extends TestCase
 
         $this->actingAs($admin)
             ->post(route('alpha.sessions.create-from-schedule'), [
-                'weekly_schedule_id' => $schedule->id,
+                'session_template_id' => $template->id,
                 'session_date' => '2026-06-08',
             ])
             ->assertRedirect();
 
-        $template = SessionTemplate::query()
-            ->where('legacy_weekly_schedule_id', $schedule->id)
-            ->firstOrFail();
         $occurrence = SessionOccurrence::query()
             ->where('session_template_id', $template->id)
             ->whereDate('occurs_on', '2026-06-08')
@@ -66,7 +62,7 @@ class SessionDeleteEvidenceGuardTest extends TestCase
         ]);
 
         $this->actingAs($admin)
-            ->delete(route('alpha.process.sessions.destroy', $legacy))
+            ->delete(route('alpha.process.sessions.destroy', $occurrence))
             ->assertSessionHasErrors('session');
 
         $occurrence->refresh();

@@ -97,7 +97,7 @@ class TargetSessionWriteCutoverTest extends TestCase
         ]);
 
         $this->actingAs($admin)
-            ->patch(route('alpha.process.sessions.update', $legacy), $payload)
+            ->patch(route('alpha.process.sessions.update', $occurrence), $payload)
             ->assertRedirect();
 
         $occurrence->refresh();
@@ -141,7 +141,7 @@ class TargetSessionWriteCutoverTest extends TestCase
         ]);
 
         $this->actingAs($this->admin())
-            ->patch(route('alpha.process.sessions.update', $legacy), $this->updatePayload($occurrence))
+            ->patch(route('alpha.process.sessions.update', $occurrence), $this->updatePayload($occurrence))
             ->assertSessionHasErrors('starts_at');
     }
 
@@ -152,7 +152,7 @@ class TargetSessionWriteCutoverTest extends TestCase
         $admin = $this->admin();
 
         $this->actingAs($admin)
-            ->patch(route('alpha.process.sessions.close', $legacy), [
+            ->patch(route('alpha.process.sessions.close', $occurrence), [
                 'class_note' => 'Closed with delayed attendance allowed.',
                 'follow_up_recommendation' => null,
             ])
@@ -226,7 +226,7 @@ class TargetSessionWriteCutoverTest extends TestCase
             ->pluck('id');
 
         $this->actingAs($this->admin())
-            ->delete(route('alpha.process.sessions.destroy', $legacy))
+            ->delete(route('alpha.process.sessions.destroy', $occurrence))
             ->assertRedirect();
 
         $this->assertDatabaseMissing('class_sessions', ['id' => $legacyId]);
@@ -257,7 +257,7 @@ class TargetSessionWriteCutoverTest extends TestCase
 
         $this->actingAs($mira)
             ->post(route('alpha.sessions.create-from-schedule'), [
-                'weekly_schedule_id' => $schedule->id,
+                'session_template_id' => $template->id,
                 'session_date' => '2026-06-08',
             ])
             ->assertForbidden();
@@ -276,7 +276,9 @@ class TargetSessionWriteCutoverTest extends TestCase
 
         $this->actingAs($this->admin())
             ->post(route('alpha.sessions.create-from-schedule'), [
-                'weekly_schedule_id' => $schedule->id,
+                'session_template_id' => SessionTemplate::query()
+                    ->where('legacy_weekly_schedule_id', $schedule->id)
+                    ->value('id'),
                 'session_date' => '2026-06-15',
             ])
             ->assertRedirect();
@@ -296,7 +298,7 @@ class TargetSessionWriteCutoverTest extends TestCase
             ->count());
 
         $this->actingAs($this->admin())
-            ->patch(route('alpha.process.sessions.update', $legacy), [
+            ->patch(route('alpha.process.sessions.update', $occurrence), [
                 'school_class_id' => $legacy->school_class_id,
                 'teacher_id' => $legacy->teacher_id,
                 'room' => 'Legacy Rollback Room',
@@ -314,7 +316,7 @@ class TargetSessionWriteCutoverTest extends TestCase
         $this->assertSame('Legacy Rollback Update', $occurrence->legacy_topic);
 
         $this->actingAs($this->admin())
-            ->patch(route('alpha.process.sessions.close', $legacy), [
+            ->patch(route('alpha.process.sessions.close', $occurrence), [
                 'class_note' => 'Rollback close path',
                 'follow_up_recommendation' => null,
             ])
@@ -330,18 +332,18 @@ class TargetSessionWriteCutoverTest extends TestCase
     {
         config()->set('montessori.session.write_source', 'target');
         $schedule = $this->schedule();
+        $template = SessionTemplate::query()
+            ->where('legacy_weekly_schedule_id', $schedule->id)
+            ->firstOrFail();
         $admin = $this->admin();
 
         $this->actingAs($admin)
             ->post(route('alpha.sessions.create-from-schedule'), [
-                'weekly_schedule_id' => $schedule->id,
+                'session_template_id' => $template->id,
                 'session_date' => $date,
             ])
             ->assertRedirect();
 
-        $template = SessionTemplate::query()
-            ->where('legacy_weekly_schedule_id', $schedule->id)
-            ->firstOrFail();
         $occurrence = SessionOccurrence::query()
             ->where('session_template_id', $template->id)
             ->whereDate('occurs_on', $date)

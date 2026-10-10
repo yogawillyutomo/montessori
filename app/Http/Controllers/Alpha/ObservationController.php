@@ -27,7 +27,8 @@ class ObservationController extends Controller
 
         if ($request->has('observations')) {
             $validated = $request->validate([
-                'class_session_id' => ['required', 'exists:class_sessions,id'],
+                'session_occurrence_id' => ['nullable', 'required_without:class_session_id', 'exists:session_occurrences,id'],
+                'class_session_id' => ['nullable', 'required_without:session_occurrence_id', 'exists:class_sessions,id'],
                 'student_id' => ['required', 'exists:students,id'],
                 'teacher_id' => ['required', 'exists:teachers,id'],
                 'observed_on' => ['required', 'date'],
@@ -39,8 +40,7 @@ class ObservationController extends Controller
             $this->assertObservationTeacher($teacher, (int) $validated['teacher_id']);
             abort_if(! in_array((int) $validated['student_id'], $scope->accessibleStudentIds($request->user()), true), 403);
 
-            $classSession = ClassSession::query()->findOrFail($validated['class_session_id']);
-            $occurrence = $this->resolveOccurrence($classSession);
+            $occurrence = $this->resolveOccurrenceFromInput($validated);
             $this->authorizeTeacherOccurrence($request, $occurrence, $scope);
             $this->assertOccurrenceStudent($occurrence, (int) $validated['student_id']);
 
@@ -51,7 +51,7 @@ class ObservationController extends Controller
                 $needsFollowUp = $row['status'] === 'needs_support';
 
                 $observation = Observation::query()->create([
-                    'class_session_id' => $classSession->id,
+                    'class_session_id' => $occurrence->legacy_class_session_id,
                     'session_occurrence_id' => $occurrence->id,
                     'student_id' => $validated['student_id'],
                     'indicator_id' => $indicator->id,
@@ -78,6 +78,7 @@ class ObservationController extends Controller
         }
 
         $validated = $request->validate([
+            'session_occurrence_id' => ['nullable', 'exists:session_occurrences,id'],
             'class_session_id' => ['nullable', 'exists:class_sessions,id'],
             'student_id' => ['required', 'exists:students,id'],
             'teacher_id' => ['required', 'exists:teachers,id'],
@@ -93,11 +94,9 @@ class ObservationController extends Controller
         $this->assertObservationTeacher($teacher, (int) $validated['teacher_id']);
         abort_if(! in_array((int) $validated['student_id'], $scope->accessibleStudentIds($request->user()), true), 403);
 
-        $classSession = null;
         $occurrence = null;
-        if ($validated['class_session_id'] ?? null) {
-            $classSession = ClassSession::query()->findOrFail($validated['class_session_id']);
-            $occurrence = $this->resolveOccurrence($classSession);
+        if (($validated['session_occurrence_id'] ?? null) || ($validated['class_session_id'] ?? null)) {
+            $occurrence = $this->resolveOccurrenceFromInput($validated);
             $this->authorizeTeacherOccurrence($request, $occurrence, $scope);
             $this->assertOccurrenceStudent($occurrence, (int) $validated['student_id']);
         }
@@ -114,13 +113,13 @@ class ObservationController extends Controller
 
         $includeInReport = $request->boolean('include_in_report');
         $observation = Observation::query()->create([
-            'class_session_id' => $classSession?->id,
+            'class_session_id' => $occurrence?->legacy_class_session_id,
             'session_occurrence_id' => $occurrence?->id,
             'student_id' => $validated['student_id'],
             'indicator_id' => $indicator?->id,
             'development_area_id' => $validated['development_area_id'],
             'teacher_id' => $validated['teacher_id'],
-            'observation_type' => $classSession ? 'scheduled' : 'spontaneous',
+            'observation_type' => $occurrence ? 'scheduled' : 'spontaneous',
             'observed_on' => Carbon::parse($validated['observed_on'])->toDateString(),
             'level' => $validated['level'],
             'status' => $includeInReport ? 'included_in_report' : 'saved',
@@ -147,8 +146,18 @@ class ObservationController extends Controller
         }
     }
 
-    private function resolveOccurrence(ClassSession $classSession): SessionOccurrence
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function resolveOccurrenceFromInput(array $validated): SessionOccurrence
     {
+        if ($validated['session_occurrence_id'] ?? null) {
+            return SessionOccurrence::query()
+                ->whereNull('legacy_deleted_at')
+                ->findOrFail((int) $validated['session_occurrence_id']);
+        }
+
+        $classSession = ClassSession::query()->findOrFail((int) $validated['class_session_id']);
         $occurrence = SessionOccurrence::query()
             ->where('legacy_class_session_id', $classSession->id)
             ->whereNull('legacy_deleted_at')
@@ -156,7 +165,7 @@ class ObservationController extends Controller
 
         if (! $occurrence) {
             throw ValidationException::withMessages([
-                'class_session_id' => 'Canonical SessionOccurrence untuk sesi observasi tidak ditemukan.',
+                'class_session_id' => 'Canonical SessionOccurrence untuk compatibility session tidak ditemukan.',
             ]);
         }
 
