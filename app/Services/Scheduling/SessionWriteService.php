@@ -19,7 +19,13 @@ class SessionWriteService
     /** @return array<int, int> */
     public function participantIdsForOccurrence(SessionOccurrence $occurrence): array
     {
-        return $this->target->participantIdsForOccurrence($occurrence);
+        if (! $this->usesLegacySource()) {
+            return $this->target->participantIdsForOccurrence($occurrence);
+        }
+
+        $legacy = $this->legacySessionFor($occurrence);
+
+        return $this->legacy->participantIds($legacy);
     }
 
     /** @return array{teacher_id: ?int, school_class_id: ?int} */
@@ -39,7 +45,18 @@ class SessionWriteService
 
     public function createFromTemplate(SessionTemplate $template, string $date, ?User $actor): SessionOccurrence
     {
-        return $this->target->createFromTemplate($template, $date, $actor);
+        if (! $this->usesLegacySource()) {
+            return $this->target->createFromTemplate($template, $date, $actor);
+        }
+
+        $legacySchedule = WeeklySchedule::query()
+            ->whereKey($template->legacy_weekly_schedule_id)
+            ->firstOrFail();
+        $legacySession = $this->legacy->createFromSchedule($legacySchedule, $date);
+
+        return SessionOccurrence::query()
+            ->where('legacy_class_session_id', $legacySession->id)
+            ->firstOrFail();
     }
 
     /** @param array<string, mixed> $attributes @param array<int, int> $studentIds */
@@ -55,23 +72,45 @@ class SessionWriteService
             ]);
         }
 
+        if ($this->usesLegacySource()) {
+            $this->legacy->update($this->legacySessionFor($occurrence), $attributes, $studentIds);
+
+            return $occurrence->fresh();
+        }
+
         return $this->target->updateOccurrence($occurrence, $attributes, $studentIds, $actor);
     }
 
     /** @param array{class_note?: ?string, follow_up_recommendation?: ?string} $notes */
     public function updateOccurrenceNotes(SessionOccurrence $occurrence, array $notes): void
     {
+        if ($this->usesLegacySource()) {
+            $this->legacy->updateNotes($this->legacySessionFor($occurrence), $notes);
+
+            return;
+        }
+
         $this->target->updateOccurrenceNotes($occurrence, $notes);
     }
 
     /** @param array{class_note?: ?string, follow_up_recommendation?: ?string} $notes */
     public function closeOccurrence(SessionOccurrence $occurrence, array $notes, ?User $actor): int
     {
+        if ($this->usesLegacySource()) {
+            return $this->legacy->close($this->legacySessionFor($occurrence), $notes, $actor);
+        }
+
         return $this->target->closeOccurrence($occurrence, $notes, $actor);
     }
 
     public function destroyOccurrence(SessionOccurrence $occurrence, ?User $actor): void
     {
+        if ($this->usesLegacySource()) {
+            $this->legacy->destroy($this->legacySessionFor($occurrence));
+
+            return;
+        }
+
         $this->target->destroyOccurrence($occurrence, $actor);
     }
 
@@ -168,6 +207,17 @@ class SessionWriteService
         }
 
         $this->target->destroy($session, $actor);
+    }
+
+    private function legacySessionFor(SessionOccurrence $occurrence): ClassSession
+    {
+        if ($occurrence->legacy_class_session_id === null) {
+            throw ValidationException::withMessages([
+                'session' => 'Legacy rollback membutuhkan compatibility ClassSession yang masih tersedia.',
+            ]);
+        }
+
+        return ClassSession::query()->findOrFail($occurrence->legacy_class_session_id);
     }
 
     private function usesLegacySource(): bool
