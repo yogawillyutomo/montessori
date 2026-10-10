@@ -127,6 +127,28 @@ class CanonicalSchedulingUiCutoverTest extends TestCase
         ]);
     }
 
+    public function test_disabling_template_preserves_default_roster_for_ui_display(): void
+    {
+        $this->seed();
+        $admin = $this->admin();
+        $template = SessionTemplate::query()
+            ->whereNull('legacy_deleted_at')
+            ->whereHas('students')
+            ->with('students')
+            ->firstOrFail();
+        $studentIds = $template->students->pluck('id')->sort()->values()->all();
+
+        $this->actingAs($admin)
+            ->patch(route('alpha.process.schedules.toggle', $template))
+            ->assertRedirect()
+            ->assertSessionDoesntHaveErrors();
+
+        $template->refresh()->load('students');
+
+        $this->assertFalse($template->is_active);
+        $this->assertSame($studentIds, $template->students->pluck('id')->sort()->values()->all());
+    }
+
     public function test_process_attendance_page_reads_occurrence_when_legacy_session_is_stale(): void
     {
         $this->seed();
