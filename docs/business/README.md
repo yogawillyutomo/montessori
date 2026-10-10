@@ -69,6 +69,17 @@ Operational modules such as schedule, session, attendance, enrollment, package a
    - testing strategy
    - next implementation branch
 
+8. [M17.3B Manual Validation Gate](./08-m17-3b-manual-validation.md)
+   - exact-head replacement release gate while GitHub Actions is unavailable
+   - target session write-cutover validation
+   - rollback and browser/UAT requirements
+
+9. [M17.4 Legacy Contraction Readiness Audit](./09-m17-4-legacy-contraction-audit.md)
+   - data-ready vs deletion-ready distinction
+   - observation occurrence contraction
+   - active legacy dependency inventory
+   - explicit blockers before destructive table retirement
+
 ## Core separations
 
 The architecture must preserve these distinctions:
@@ -162,4 +173,3 @@ These documents are business baselines, not immutable specifications. When real 
 
 Avoid silently changing historical meaning in database migrations or controller logic without updating the relevant business rule.
 
-- [M17.4 Legacy Contraction Readiness Audit](09-m17-4-legacy-contraction-audit.md)
