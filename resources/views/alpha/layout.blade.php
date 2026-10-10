@@ -193,6 +193,21 @@
         </div>
     </form>
 </dialog>
+<dialog class="modal" id="confirm-action-dialog">
+    <div class="modal-head">
+        <div>
+            <h3 id="confirm-action-title">Konfirmasi Tindakan</h3>
+            <div class="meta" id="confirm-action-message">Pastikan tindakan ini memang ingin dilanjutkan.</div>
+        </div>
+        <button class="icon-btn" type="button" data-modal-close aria-label="Tutup">
+            <i data-lucide="x" class="nav-icon"></i>
+        </button>
+    </div>
+    <div class="toolbar modal-actions">
+        <button class="btn ghost" type="button" data-modal-close>Batal</button>
+        <button class="btn primary" type="button" id="confirm-action-submit">Lanjutkan</button>
+    </div>
+</dialog>
 @if ($errors->any() && old('_modal'))
     <template id="modal-error-template">
         <div class="notice error modal-error">
@@ -234,12 +249,63 @@
         });
     });
 
+    const confirmActionDialog = document.getElementById('confirm-action-dialog');
+    const confirmActionTitle = document.getElementById('confirm-action-title');
+    const confirmActionMessage = document.getElementById('confirm-action-message');
+    const confirmActionSubmit = document.getElementById('confirm-action-submit');
+    let pendingConfirmTrigger = null;
+
     document.querySelectorAll('[data-confirm]').forEach((trigger) => {
         trigger.addEventListener('click', (event) => {
-            if (!window.confirm(trigger.dataset.confirm)) {
-                event.preventDefault();
+            if (!confirmActionDialog?.showModal) {
+                return;
             }
+
+            event.preventDefault();
+            pendingConfirmTrigger = trigger;
+
+            const triggerLabel = trigger.textContent.trim();
+            confirmActionTitle.textContent = trigger.dataset.confirmTitle
+                || (triggerLabel ? `${triggerLabel}?` : 'Konfirmasi Tindakan');
+            confirmActionMessage.textContent = trigger.dataset.confirm
+                || 'Pastikan tindakan ini memang ingin dilanjutkan.';
+            confirmActionSubmit.textContent = trigger.dataset.confirmLabel
+                || triggerLabel
+                || 'Lanjutkan';
+            confirmActionSubmit.className = trigger.classList.contains('danger')
+                ? 'btn danger'
+                : trigger.classList.contains('teal')
+                    ? 'btn teal'
+                    : 'btn primary';
+
+            confirmActionDialog.showModal();
         });
+    });
+
+    confirmActionSubmit?.addEventListener('click', () => {
+        const trigger = pendingConfirmTrigger;
+        if (!trigger) {
+            confirmActionDialog?.close();
+
+            return;
+        }
+
+        pendingConfirmTrigger = null;
+        confirmActionDialog?.close();
+
+        if (trigger.form) {
+            trigger.form.requestSubmit(trigger);
+
+            return;
+        }
+
+        if (trigger instanceof HTMLAnchorElement && trigger.href) {
+            window.location.assign(trigger.href);
+        }
+    });
+
+    confirmActionDialog?.addEventListener('close', () => {
+        pendingConfirmTrigger = null;
     });
 
     document.querySelectorAll('dialog form').forEach((form) => {
