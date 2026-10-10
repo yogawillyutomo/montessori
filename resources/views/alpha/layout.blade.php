@@ -556,22 +556,47 @@
             return local.toISOString().slice(0, 10);
         };
 
-        const nextDateForDay = (day) => {
-            const targetDay = Number(day);
-            const today = new Date();
-            const currentDay = today.getDay() === 0 ? 7 : today.getDay();
-            const dayOffset = (targetDay - currentDay + 7) % 7;
-            today.setDate(today.getDate() + dayOffset);
+        const isoDayOfWeek = (isoDate) => {
+            const [year, month, day] = String(isoDate || '').split('-').map(Number);
+            if (!year || !month || !day) {
+                return null;
+            }
 
-            return toIsoDate(today);
+            const date = new Date(year, month - 1, day);
+            const jsDay = date.getDay();
+
+            return jsDay === 0 ? 7 : jsDay;
+        };
+
+        const nextDateForDay = (day, anchorValue = dateInput.value) => {
+            const targetDay = Number(day);
+            let anchor = new Date();
+
+            if (anchorValue) {
+                const [year, month, date] = anchorValue.split('-').map(Number);
+                if (year && month && date) {
+                    anchor = new Date(year, month - 1, date);
+                }
+            }
+
+            const currentDay = anchor.getDay() === 0 ? 7 : anchor.getDay();
+            const dayOffset = (targetDay - currentDay + 7) % 7;
+            anchor.setDate(anchor.getDate() + dayOffset);
+
+            return toIsoDate(anchor);
         };
 
         select.addEventListener('change', () => {
             const selected = select.selectedOptions[0];
             const day = selected?.dataset.day;
 
-            if (day) {
-                dateInput.value = nextDateForDay(day);
+            if (!day) {
+                return;
+            }
+
+            const targetDay = Number(day);
+            if (!dateInput.value || isoDayOfWeek(dateInput.value) !== targetDay) {
+                dateInput.value = nextDateForDay(day, dateInput.value);
             }
         });
     });
