@@ -193,19 +193,25 @@
         </div>
     </form>
 </dialog>
-<dialog class="modal" id="confirm-action-dialog">
-    <div class="modal-head">
-        <div>
-            <h3 id="confirm-action-title">Konfirmasi Tindakan</h3>
-            <div class="meta" id="confirm-action-message">Pastikan tindakan ini memang ingin dilanjutkan.</div>
+<dialog class="modal confirm-action-modal" id="confirm-action-dialog">
+    <div class="modal-body confirm-action-body">
+        <div class="confirm-action-top">
+            <div class="confirm-action-icon" aria-hidden="true">
+                <i data-lucide="circle-help"></i>
+            </div>
+            <button class="icon-btn confirm-action-close" type="button" data-modal-close aria-label="Tutup">
+                <i data-lucide="x" class="nav-icon"></i>
+            </button>
         </div>
-        <button class="icon-btn" type="button" data-modal-close aria-label="Tutup">
-            <i data-lucide="x" class="nav-icon"></i>
-        </button>
-    </div>
-    <div class="toolbar modal-actions">
-        <button class="btn ghost" type="button" data-modal-close>Batal</button>
-        <button class="btn primary" type="button" id="confirm-action-submit">Lanjutkan</button>
+        <div class="confirm-action-copy">
+            <span class="confirm-action-kicker">Konfirmasi</span>
+            <h3 id="confirm-action-title">Konfirmasi Tindakan</h3>
+            <p class="meta" id="confirm-action-message">Pastikan tindakan ini memang ingin dilanjutkan.</p>
+        </div>
+        <div class="toolbar modal-actions confirm-action-actions">
+            <button class="btn ghost" type="button" data-modal-close>Batal</button>
+            <button class="btn primary" type="button" id="confirm-action-submit">Lanjutkan</button>
+        </div>
     </div>
 </dialog>
 @if ($errors->any() && old('_modal'))
