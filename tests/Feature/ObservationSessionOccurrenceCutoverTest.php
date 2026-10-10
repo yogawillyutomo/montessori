@@ -6,9 +6,11 @@ use App\Models\ChildSessionBooking;
 use App\Models\ClassSession;
 use App\Models\Indicator;
 use App\Models\Observation;
+use App\Models\WeeklySchedule;
 use App\Models\SessionOccurrence;
 use App\Models\User;
 use App\Services\Scheduling\BookingEvidenceService;
+use App\Services\Scheduling\SchedulingReadModelService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -93,4 +95,81 @@ class ObservationSessionOccurrenceCutoverTest extends TestCase
 
         $this->assertTrue(app(BookingEvidenceService::class)->hasObservationEvidence($booking));
     }
+    public function test_target_session_read_count_does_not_depend_on_legacy_observation_fk(): void
+    {
+        $this->seed();
+
+        $observation = Observation::query()
+            ->whereNotNull('session_occurrence_id')
+            ->whereNotNull('class_session_id')
+            ->firstOrFail();
+        $occurrence = SessionOccurrence::query()->findOrFail($observation->session_occurrence_id);
+
+        DB::table('observations')
+            ->where('id', $observation->id)
+            ->update(['class_session_id' => null]);
+
+        $session = app(SchedulingReadModelService::class)
+            ->sessions([(int) $occurrence->legacy_school_class_id], null)
+            ->firstWhere('id', $occurrence->legacy_class_session_id);
+
+        $this->assertNotNull($session);
+        $this->assertGreaterThanOrEqual(1, (int) $session->observations_count);
+    }
+
+    public function test_target_session_delete_is_blocked_by_target_only_observation_evidence(): void
+    {
+        $this->seed();
+
+        $admin = User::query()->where('email', 'ops@montessori.test')->firstOrFail();
+        $schedule = WeeklySchedule::query()
+            ->where('day_of_week', 1)
+            ->where('room', 'Ruang Sunny')
+            ->firstOrFail();
+
+        $this->actingAs($admin)
+            ->post(route('alpha.sessions.create-from-schedule'), [
+                'weekly_schedule_id' => $schedule->id,
+                'session_date' => '2026-06-08',
+            ])
+            ->assertRedirect();
+
+        $occurrence = SessionOccurrence::query()
+            ->where('legacy_weekly_schedule_id', $schedule->id)
+            ->whereDate('occurs_on', '2026-06-08')
+            ->firstOrFail();
+        $legacy = ClassSession::query()->findOrFail($occurrence->legacy_class_session_id);
+        $booking = ChildSessionBooking::query()
+            ->where('session_occurrence_id', $occurrence->id)
+            ->firstOrFail();
+        $indicator = Indicator::query()->firstOrFail();
+
+        Observation::query()->create([
+            'class_session_id' => null,
+            'session_occurrence_id' => $occurrence->id,
+            'student_id' => $booking->student_id,
+            'indicator_id' => $indicator->id,
+            'development_area_id' => $indicator->development_area_id,
+            'teacher_id' => $occurrence->legacy_teacher_id,
+            'observation_type' => 'scheduled',
+            'observed_on' => $occurrence->occurs_on,
+            'level' => 'developing',
+            'status' => 'saved',
+            'score' => Observation::scoreForLevel('developing'),
+            'note' => 'Target-only evidence must block destructive deletion.',
+            'needs_follow_up' => false,
+            'include_in_report' => false,
+        ]);
+
+        $this->actingAs($admin)
+            ->delete(route('alpha.process.sessions.destroy', $legacy))
+            ->assertSessionHasErrors('session');
+
+        $this->assertDatabaseHas('session_occurrences', [
+            'id' => $occurrence->id,
+            'status' => 'planned',
+            'legacy_deleted_at' => null,
+        ]);
+    }
+
 }
