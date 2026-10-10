@@ -174,14 +174,19 @@
         </form>
     </dialog>
 @endauth
-<dialog class="modal" id="confirm-delete-dialog">
+<dialog class="modal delete-confirm-modal" id="confirm-delete-dialog">
     <form method="post" id="confirm-delete-form">
         @csrf
         @method('delete')
         <div class="modal-head">
-            <div>
-                <h3>Konfirmasi Hapus</h3>
-                <div class="meta" id="confirm-delete-message">Data yang dihapus tidak selalu bisa dikembalikan.</div>
+            <div class="confirm-delete-heading">
+                <div class="confirm-action-icon confirm-action-icon-danger" aria-hidden="true">
+                    <i data-lucide="trash-2"></i>
+                </div>
+                <div>
+                    <h3>Konfirmasi Hapus</h3>
+                    <div class="meta" id="confirm-delete-message">Data yang dihapus tidak selalu bisa dikembalikan.</div>
+                </div>
             </div>
             <button class="icon-btn" type="button" data-modal-close aria-label="Tutup">
                 <i data-lucide="x" class="nav-icon"></i>
