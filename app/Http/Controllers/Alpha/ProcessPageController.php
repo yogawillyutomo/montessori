@@ -70,6 +70,7 @@ class ProcessPageController extends Controller
                 'students.guardian',
                 'students.schoolClass.classLevel',
                 'attendances.student',
+                'legacyClassSession',
             ])
             ->withCount('observations')
             ->whereNull('legacy_deleted_at')
