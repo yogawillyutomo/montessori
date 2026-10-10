@@ -161,3 +161,5 @@ The first implementation tranche should focus on security/correctness only befor
 These documents are business baselines, not immutable specifications. When real school practice contradicts a rule here, update the business documentation first and then change the implementation deliberately.
 
 Avoid silently changing historical meaning in database migrations or controller logic without updating the relevant business rule.
+
+- [M17.4 Legacy Contraction Readiness Audit](09-m17-4-legacy-contraction-audit.md)
