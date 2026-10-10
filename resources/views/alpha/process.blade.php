@@ -892,7 +892,7 @@
                                     $start = \Illuminate\Support\Carbon::parse($session->starts_at)->format('H:i');
                                     $sessionStudentIds = $session->students->pluck('id')->implode(',');
                                 @endphp
-                                <option value="{{ $session->id }}" data-student-ids="{{ $sessionStudentIds }}" @selected((int) old('class_session_id') === $session->id)>
+                                <option value="{{ $session->id }}" data-student-ids="{{ $sessionStudentIds }}" @selected((int) old('session_occurrence_id') === $session->id)>
                                     {{ $session->occurs_on->format('d M') }} | {{ $start }} | {{ $session->schoolClass->name }} | {{ $session->legacy_topic }}
                                 </option>
                             @endforeach
