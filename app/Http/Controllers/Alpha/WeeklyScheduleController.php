@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Alpha;
 
 use App\Http\Controllers\Controller;
 use App\Models\SchoolClass;
-use App\Models\WeeklySchedule;
+use App\Models\SessionTemplate;
 use App\Services\Scheduling\ScheduleWriteService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -16,35 +16,31 @@ class WeeklyScheduleController extends Controller
     {
         $validated = $this->rules($request);
         $validated['capacity'] = $this->resolveCapacity($validated['capacity'] ?? null, (int) $validated['school_class_id']);
-        $writer->create($validated);
+        $writer->createTarget($validated);
 
         return back()->with('status', 'Jadwal mingguan berhasil ditambahkan.');
     }
 
-    public function update(Request $request, WeeklySchedule $weeklySchedule, ScheduleWriteService $writer): RedirectResponse
+    public function update(Request $request, SessionTemplate $sessionTemplate, ScheduleWriteService $writer): RedirectResponse
     {
         $validated = $this->rules($request);
         $validated['capacity'] = $this->resolveCapacity($validated['capacity'] ?? null, (int) $validated['school_class_id']);
-        $writer->update($weeklySchedule, $validated);
+        $writer->updateTarget($sessionTemplate, $validated);
 
         return back()->with('status', 'Jadwal mingguan berhasil diperbarui.');
     }
 
-    public function toggle(WeeklySchedule $weeklySchedule, ScheduleWriteService $writer): RedirectResponse
+    public function toggle(SessionTemplate $sessionTemplate, ScheduleWriteService $writer): RedirectResponse
     {
-        $writer->toggle($weeklySchedule);
+        $writer->toggleTarget($sessionTemplate);
 
         return back()->with('status', 'Status jadwal mingguan berhasil diperbarui.');
     }
 
-    public function destroy(WeeklySchedule $weeklySchedule, ScheduleWriteService $writer): RedirectResponse
+    public function destroy(SessionTemplate $sessionTemplate, ScheduleWriteService $writer): RedirectResponse
     {
-        if ($weeklySchedule->classSessions()->exists()) {
-            return back()->withErrors('Jadwal tidak bisa dihapus karena sudah pernah dibuat menjadi presensi.');
-        }
-
         try {
-            $writer->delete($weeklySchedule);
+            $writer->deleteTarget($sessionTemplate);
         } catch (ValidationException $exception) {
             return back()->withErrors($exception->errors());
         }
