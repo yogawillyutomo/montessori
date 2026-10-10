@@ -2,7 +2,7 @@
 
 namespace App\Http\Middleware;
 
-use App\Models\ClassSession;
+use App\Models\SessionOccurrence;
 use App\Services\Alpha\AccessScopeService;
 use App\Services\Scheduling\SessionWriteService;
 use App\Support\Alpha\Role;
@@ -24,14 +24,14 @@ class EnsureTeacherSessionMutationScope
         $teacher = $scope->teacherFor($user);
         abort_if(! $teacher, 403);
 
-        $routeSession = $request->route('classSession');
-        $classSession = $routeSession instanceof ClassSession
-            ? $routeSession
-            : ClassSession::query()->findOrFail($routeSession);
-        $ownership = app(SessionWriteService::class)->ownership($classSession);
+        $routeOccurrence = $request->route('sessionOccurrence');
+        $sessionOccurrence = $routeOccurrence instanceof SessionOccurrence
+            ? $routeOccurrence
+            : SessionOccurrence::query()->whereNull('legacy_deleted_at')->findOrFail($routeOccurrence);
+        $ownership = app(SessionWriteService::class)->ownershipForOccurrence($sessionOccurrence);
 
-        // In target mode this ownership comes from canonical SessionOccurrence lineage,
-        // so a stale/corrupted compatibility ClassSession cannot expand teacher scope.
+        // M17.5 route identity is canonical SessionOccurrence, so compatibility
+        // ClassSession state cannot participate in the authorization decision.
         abort_if($ownership['teacher_id'] === null || $ownership['teacher_id'] !== (int) $teacher->id, 403);
 
         if ($request->filled('teacher_id')) {
