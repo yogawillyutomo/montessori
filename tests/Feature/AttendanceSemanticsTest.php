@@ -3,9 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\AttendanceAudit;
-use App\Models\ClassSession;
+use App\Models\SessionOccurrence;
+use App\Models\SessionTemplate;
 use App\Models\User;
-use App\Models\WeeklySchedule;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -122,7 +122,7 @@ class AttendanceSemanticsTest extends TestCase
         $attendance = $session->attendances()->where('student_id', $studentId)->firstOrFail();
         $this->assertSame('present', $attendance->status);
         $this->assertSame('2026-06-10', $attendance->marked_at->toDateString());
-        $this->assertSame('2026-06-08', $session->session_date->toDateString());
+        $this->assertSame('2026-06-08', $session->occurs_on->toDateString());
 
         $this->assertDatabaseHas('attendance_audits', [
             'attendance_id' => $attendance->id,
@@ -137,21 +137,25 @@ class AttendanceSemanticsTest extends TestCase
         return User::query()->where('email', 'ops@montessori.test')->firstOrFail();
     }
 
-    private function createMondaySession(): ClassSession
+    private function createMondaySession(): SessionOccurrence
     {
-        $schedule = WeeklySchedule::query()->with('students')->where('day_of_week', 1)->firstOrFail();
+        $template = SessionTemplate::query()
+            ->with('students')
+            ->where('day_of_week', 1)
+            ->whereNull('legacy_deleted_at')
+            ->firstOrFail();
 
         $this->from('/process/attendance')
             ->post(route('alpha.sessions.create-from-schedule'), [
-                'weekly_schedule_id' => $schedule->id,
+                'session_template_id' => $template->id,
                 'session_date' => '2026-06-08',
             ])
             ->assertRedirect('/process/attendance')
             ->assertSessionDoesntHaveErrors();
 
-        return ClassSession::query()
-            ->where('weekly_schedule_id', $schedule->id)
-            ->whereDate('session_date', '2026-06-08')
+        return SessionOccurrence::query()
+            ->where('session_template_id', $template->id)
+            ->whereDate('occurs_on', '2026-06-08')
             ->with(['students', 'attendances'])
             ->firstOrFail();
     }
