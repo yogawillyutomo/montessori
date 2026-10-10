@@ -6,9 +6,9 @@ use App\Models\ChildSessionBooking;
 use App\Models\ClassSession;
 use App\Models\Indicator;
 use App\Models\Observation;
-use App\Models\WeeklySchedule;
 use App\Models\SessionOccurrence;
 use App\Models\User;
+use App\Models\WeeklySchedule;
 use App\Services\Scheduling\BookingEvidenceService;
 use App\Services\Scheduling\SchedulingReadModelService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -95,6 +95,7 @@ class ObservationSessionOccurrenceCutoverTest extends TestCase
 
         $this->assertTrue(app(BookingEvidenceService::class)->hasObservationEvidence($booking));
     }
+
     public function test_target_session_read_count_does_not_depend_on_legacy_observation_fk(): void
     {
         $this->seed();
@@ -171,5 +172,4 @@ class ObservationSessionOccurrenceCutoverTest extends TestCase
             'legacy_deleted_at' => null,
         ]);
     }
-
 }
