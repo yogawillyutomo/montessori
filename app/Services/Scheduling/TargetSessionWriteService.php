@@ -168,6 +168,9 @@ class TargetSessionWriteService
     /** @param array{class_note?: ?string, follow_up_recommendation?: ?string} $notes */
     public function updateOccurrenceNotes(SessionOccurrence $occurrence, array $notes): void
     {
+        $occurrence = SessionOccurrence::query()
+            ->whereNull('legacy_deleted_at')
+            ->findOrFail($occurrence->id);
         $legacyId = $this->compatibility->syncOccurrence($occurrence);
 
         if ($legacyId === null) {
