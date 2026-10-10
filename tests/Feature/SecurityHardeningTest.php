@@ -55,7 +55,7 @@ class SecurityHardeningTest extends TestCase
             ]))
             ->assertForbidden();
 
-        $this->assertSame($teacher->id, $session->fresh()->teacher_id);
+        $this->assertSame($teacher->id, $session->fresh()->legacy_teacher_id);
     }
 
     public function test_teacher_cannot_reassign_owned_session_to_another_class(): void
@@ -77,7 +77,7 @@ class SecurityHardeningTest extends TestCase
             ]))
             ->assertForbidden();
 
-        $this->assertSame($session->school_class_id, $session->fresh()->school_class_id);
+        $this->assertSame($session->legacy_school_class_id, $session->fresh()->legacy_school_class_id);
     }
 
     public function test_generic_report_save_cannot_publish_a_draft(): void
