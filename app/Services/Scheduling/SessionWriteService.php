@@ -3,6 +3,7 @@
 namespace App\Services\Scheduling;
 
 use App\Models\ClassSession;
+use App\Models\SessionOccurrence;
 use App\Models\SessionTemplate;
 use App\Models\User;
 use App\Models\WeeklySchedule;
@@ -14,6 +15,65 @@ class SessionWriteService
         private readonly TargetSessionWriteService $target,
         private readonly LegacySessionWriteService $legacy,
     ) {}
+
+    /** @return array<int, int> */
+    public function participantIdsForOccurrence(SessionOccurrence $occurrence): array
+    {
+        return $this->target->participantIdsForOccurrence($occurrence);
+    }
+
+    /** @return array{teacher_id: ?int, school_class_id: ?int} */
+    public function ownershipForOccurrence(SessionOccurrence $occurrence): array
+    {
+        return $this->target->ownershipForOccurrence($occurrence);
+    }
+
+    /** @return array{teacher_id: ?int, school_class_id: ?int} */
+    public function scheduleOwnershipForTemplate(SessionTemplate $template): array
+    {
+        return [
+            'teacher_id' => $template->legacy_teacher_id === null ? null : (int) $template->legacy_teacher_id,
+            'school_class_id' => $template->legacy_school_class_id === null ? null : (int) $template->legacy_school_class_id,
+        ];
+    }
+
+    public function createFromTemplate(SessionTemplate $template, string $date, ?User $actor): SessionOccurrence
+    {
+        return $this->target->createFromTemplate($template, $date, $actor);
+    }
+
+    /** @param array<string, mixed> $attributes @param array<int, int> $studentIds */
+    public function updateOccurrence(
+        SessionOccurrence $occurrence,
+        array $attributes,
+        array $studentIds,
+        ?User $actor,
+    ): SessionOccurrence {
+        if (($attributes['status'] ?? 'planned') !== 'planned') {
+            throw ValidationException::withMessages([
+                'status' => 'Gunakan workflow close atau cancellation untuk mengubah lifecycle occurrence.',
+            ]);
+        }
+
+        return $this->target->updateOccurrence($occurrence, $attributes, $studentIds, $actor);
+    }
+
+    /** @param array{class_note?: ?string, follow_up_recommendation?: ?string} $notes */
+    public function updateOccurrenceNotes(SessionOccurrence $occurrence, array $notes): void
+    {
+        $this->target->updateOccurrenceNotes($occurrence, $notes);
+    }
+
+    /** @param array{class_note?: ?string, follow_up_recommendation?: ?string} $notes */
+    public function closeOccurrence(SessionOccurrence $occurrence, array $notes, ?User $actor): int
+    {
+        return $this->target->closeOccurrence($occurrence, $notes, $actor);
+    }
+
+    public function destroyOccurrence(SessionOccurrence $occurrence, ?User $actor): void
+    {
+        $this->target->destroyOccurrence($occurrence, $actor);
+    }
 
     /** @return array<int, int> */
     public function participantIds(ClassSession $session): array
