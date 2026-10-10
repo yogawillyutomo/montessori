@@ -7,8 +7,8 @@ use App\Models\ClassSession;
 use App\Models\Indicator;
 use App\Models\Observation;
 use App\Models\SessionOccurrence;
+use App\Models\SessionTemplate;
 use App\Models\User;
-use App\Models\WeeklySchedule;
 use App\Services\Scheduling\BookingEvidenceService;
 use App\Services\Scheduling\SchedulingReadModelService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -174,20 +174,20 @@ class ObservationSessionOccurrenceCutoverTest extends TestCase
         $this->seed();
 
         $admin = User::query()->where('email', 'ops@montessori.test')->firstOrFail();
-        $schedule = WeeklySchedule::query()
+        $template = SessionTemplate::query()
             ->where('day_of_week', 1)
             ->where('room', 'Ruang Sunny')
             ->firstOrFail();
 
         $this->actingAs($admin)
             ->post(route('alpha.sessions.create-from-schedule'), [
-                'weekly_schedule_id' => $schedule->id,
+                'session_template_id' => $template->id,
                 'session_date' => '2026-06-08',
             ])
             ->assertRedirect();
 
         $occurrence = SessionOccurrence::query()
-            ->where('legacy_weekly_schedule_id', $schedule->id)
+            ->where('session_template_id', $template->id)
             ->whereDate('occurs_on', '2026-06-08')
             ->firstOrFail();
         $legacy = ClassSession::query()->findOrFail($occurrence->legacy_class_session_id);
@@ -214,7 +214,7 @@ class ObservationSessionOccurrenceCutoverTest extends TestCase
         ]);
 
         $this->actingAs($admin)
-            ->delete(route('alpha.process.sessions.destroy', $legacy))
+            ->delete(route('alpha.process.sessions.destroy', $occurrence))
             ->assertSessionHasErrors('session');
 
         $this->assertDatabaseHas('session_occurrences', [
