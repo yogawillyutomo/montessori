@@ -80,6 +80,13 @@ Operational modules such as schedule, session, attendance, enrollment, package a
    - active legacy dependency inventory
    - explicit blockers before destructive table retirement
 
+
+10. [M17.5 Canonical Scheduling UI & Route Cutover](./10-m17-5-canonical-ui-route-cutover.md)
+   - SessionTemplate / SessionOccurrence browser identity
+   - canonical route model binding
+   - target authorization with compatibility mirrors behind the UI
+   - rollback preservation until compatibility retirement
+
 ## Core separations
 
 The architecture must preserve these distinctions:
