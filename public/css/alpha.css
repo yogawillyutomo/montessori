@@ -1197,6 +1197,27 @@ textarea:focus {
     height: 22px;
 }
 
+.confirm-action-icon-danger {
+    background: var(--danger-light);
+    border-color: var(--danger-light);
+    color: var(--danger);
+}
+
+.confirm-delete-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+}
+
+.confirm-delete-heading > div:last-child {
+    display: grid;
+    gap: 6px;
+}
+
+.confirm-delete-heading .meta {
+    line-height: 1.55;
+}
+
 .confirm-action-close {
     flex: 0 0 auto;
 }
