@@ -97,6 +97,11 @@ class SessionOccurrence extends Model
         return $this->hasMany(Presentation::class);
     }
 
+    public function observations(): HasMany
+    {
+        return $this->hasMany(Observation::class);
+    }
+
     public function activeBookingCount(): int
     {
         return $this->activeBookings()->count();
