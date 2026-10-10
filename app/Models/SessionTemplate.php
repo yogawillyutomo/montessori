@@ -63,7 +63,6 @@ class SessionTemplate extends Model
     public function students(): BelongsToMany
     {
         return $this->belongsToMany(Student::class, 'recurring_schedules', 'session_template_id', 'student_id')
-            ->wherePivot('is_active', true)
             ->wherePivotNull('legacy_deleted_at')
             ->withPivot(['id', 'day_of_week', 'valid_from', 'valid_until']);
     }
